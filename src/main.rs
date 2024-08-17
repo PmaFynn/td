@@ -4,15 +4,17 @@ use td;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let todo_path: &str = "/home/fynn/todo.txt";
+    let todo_path: &str = "/home/fynn/todos.txt";
     if args.len() == 1 {
-        //TODO: print out the file
-        panic!("for now -> at least one thing has to be appended to the call");
+        td::run(todo_path).unwrap_or_else(|_| {
+            println!("No todo file found. \nConsider: td init");
+        });
+    } else {
+        let todo_instance = td::Task::build(&args, todo_path).unwrap_or_else(|err| {
+            println!("Problem parsing arguments: {err}");
+            process::exit(1);
+        });
     }
-    let todo_instance = td::Task::build(&args).unwrap_or_else(|err| {
-        println!("Problem parsing arguments: {err}");
-        process::exit(1);
-    });
     //match &args.len().cmp(&default_len) {
     //    Ordering::Less => {
     //        //TODO: print out list of todos
