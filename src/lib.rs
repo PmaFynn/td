@@ -2,6 +2,9 @@ use std::error::Error;
 use std::fs;
 use std::io::Write;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug)]
 pub enum Status {
     Done,
@@ -29,7 +32,6 @@ impl Task {
                 task: args[1].clone(),
                 status: Status::Open,
             };
-            //TODO: call to write to end of file here
             write_todo(path, todo_instance);
             return Ok(());
         }

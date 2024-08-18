@@ -1,9 +1,12 @@
 use std::env;
 use td;
 
+#[cfg(test)]
+mod tests;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    //let todo_path: &str = "~/todos.txt";
+    //TODO: make that dynamic instead of hardcoded for me
     let todo_path: &str = "/home/fynn/.todos.txt";
     if args.len() > 2 {
         println!(
