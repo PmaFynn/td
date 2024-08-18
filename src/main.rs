@@ -4,13 +4,14 @@ use td;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    //let todo_path: &str = "~/todos.txt";
     let todo_path: &str = "/home/fynn/todos.txt";
     if args.len() == 1 {
         td::run(todo_path).unwrap_or_else(|_| {
             println!("No todo file found. \nConsider: td init");
         });
     } else {
-        let todo_instance = td::Task::build(&args, todo_path).unwrap_or_else(|err| {
+        let _todo_instance = td::Task::build(&args, todo_path).unwrap_or_else(|err| {
             println!("Problem parsing arguments: {err}");
             process::exit(1);
         });
