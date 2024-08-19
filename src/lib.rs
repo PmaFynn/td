@@ -4,13 +4,13 @@ use crossterm::{
     terminal::{self, disable_raw_mode, enable_raw_mode, size, window_size, WindowSize},
     ExecutableCommand, QueueableCommand,
 };
-use std::error::Error;
-use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{env, io::Read};
+use std::{error::Error, io::stdout};
+use std::{fs, os::unix::process};
 
 #[derive(Debug)]
 pub enum Status {
@@ -63,7 +63,13 @@ fn prints_todo(path: PathBuf) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+struct Win {
+    width: u16,
+    height: u16,
+}
+
 fn main_tui(path: PathBuf) -> io::Result<()> {
+    //TODO: perhaps use alternate screen
     let mut stdout = io::stdout();
 
     // I dont think I need this
@@ -76,21 +82,25 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         .open(path)
         .unwrap();
 
-    // init empty string
     let mut contents: String = String::new();
-    //return the amount of bytes appended to contents string <- useless
+    //returns the amount of bytes appended to contents string <- useless
     let _ = file.read_to_string(&mut contents);
 
-    //let mut count = 0;
-
-    let (width, height) = size().unwrap();
     loop {
+        let current_window = Win {
+            width: size().unwrap().0,
+            height: size().unwrap().1,
+        };
         // Move the cursor to position (5, 5)
-        stdout.execute(terminal::Clear(terminal::ClearType::All))?;
+        stdout.queue(terminal::Clear(terminal::ClearType::All))?;
         stdout
-            .execute(cursor::MoveTo(width / 2, height / 2))
+            .queue(cursor::MoveTo(current_window.width / 2, 0))
             .unwrap();
+        stdout.queue(Print("Open\tDone")).unwrap();
 
+        //TODO: height should not be 0 here but at least the height of the first line
+        stdout.queue(cursor::MoveTo(0, 0)).unwrap();
+        stdout.queue(cursor::MoveToNextLine(2)).unwrap();
         for line in contents.lines() {
             //let split_lines: Vec<&str> = line.split('\t').collect();
             if let Some((status, task)) = line.split_once('\t') {
@@ -98,25 +108,70 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     //println!("{}\t{}", status, task);
                     let task_to_print = format!("{}\t{}", status, task);
                     stdout.queue(Print(&task_to_print)).unwrap();
+                    stdout.queue(cursor::MoveToNextLine(1)).unwrap();
                 }
             }
         }
         stdout.flush()?;
 
-        if event::poll(Duration::from_millis(50))? {
-            match event::read()? {
-                event::Event::Key(event) => match event.code {
-                    event::KeyCode::Char('q') => break,
-                    _ => (),
-                },
-                _ => (),
-                // Event::Resize(width, height) => println!("New size {}x{}", width, height),
-            }
+        match event::read()? {
+            event::Event::Key(event) => match event.code {
+                event::KeyCode::Char('q') => break,
+                _ => {}
+            },
+            _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
         }
         // Add a small delay to reduce CPU usage and prevent flickering
         sleep(Duration::from_millis(50));
     }
     let _ = disable_raw_mode();
+    Ok(())
+}
+
+fn prints_current(path: PathBuf) -> io::Result<()> {
+    let mut stdout = io::stdout();
+
+    // I dont think I need this
+    let _ = enable_raw_mode();
+
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .read(true)
+        .create(true)
+        .open(path)
+        .unwrap();
+
+    let mut contents: String = String::new();
+    //returns the amount of bytes appended to contents string <- useless
+    let _ = file.read_to_string(&mut contents);
+
+    let current_window = Win {
+        width: size().unwrap().0,
+        height: size().unwrap().1,
+    };
+    // Move the cursor to position (5, 5)
+    stdout.queue(terminal::Clear(terminal::ClearType::All))?;
+    stdout
+        .queue(cursor::MoveTo(current_window.width / 2, 0))
+        .unwrap();
+    stdout.queue(Print("Open\tDone")).unwrap();
+
+    //TODO: height should not be 0 here but at least the height of the first line
+    stdout.queue(cursor::MoveTo(0, 0)).unwrap();
+    stdout.queue(cursor::MoveToNextLine(2)).unwrap();
+    for line in contents.lines() {
+        //let split_lines: Vec<&str> = line.split('\t').collect();
+        if let Some((status, task)) = line.split_once('\t') {
+            if status == "[ ]" {
+                //println!("{}\t{}", status, task);
+                let task_to_print = format!("{}\t{}", status, task);
+                stdout.queue(Print(&task_to_print)).unwrap();
+                stdout.queue(cursor::MoveToNextLine(1)).unwrap();
+            }
+        }
+    }
+    stdout.flush()?;
+
     Ok(())
 }
 
