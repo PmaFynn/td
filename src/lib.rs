@@ -1,12 +1,15 @@
 use crossterm::{
-    cursor,
-    style::{self, Stylize},
-    terminal, ExecutableCommand, QueueableCommand,
+    cursor, event,
+    style::{self, Print, Stylize},
+    terminal::{self, disable_raw_mode, enable_raw_mode, size, window_size, WindowSize},
+    ExecutableCommand, QueueableCommand,
 };
 use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use std::thread::sleep;
+use std::time::Duration;
 use std::{env, io::Read};
 
 #[derive(Debug)]
@@ -63,6 +66,9 @@ fn prints_todo(path: PathBuf) -> Result<(), Box<dyn Error>> {
 fn main_tui(path: PathBuf) -> io::Result<()> {
     let mut stdout = io::stdout();
 
+    // I dont think I need this
+    let _ = enable_raw_mode();
+
     let mut file = fs::OpenOptions::new()
         .write(true)
         .read(true)
@@ -75,22 +81,42 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     //return the amount of bytes appended to contents string <- useless
     let _ = file.read_to_string(&mut contents);
 
-    //clears terminal
-    stdout.execute(terminal::Clear(terminal::ClearType::All))?;
+    //let mut count = 0;
 
-    for y in 0..40 {
-        for x in 0..150 {
-            if (y == 0 || y == 40 - 1) || (x == 0 || x == 150 - 1) {
-                // in this loop we are more efficient by not flushing the buffer.
-                stdout
-                    .queue(cursor::MoveTo(x, y))?
-                    .queue(style::PrintStyledContent("█".magenta()))?;
+    let (width, height) = size().unwrap();
+    loop {
+        // Move the cursor to position (5, 5)
+        stdout.execute(terminal::Clear(terminal::ClearType::All))?;
+        stdout
+            .execute(cursor::MoveTo(width / 2, height / 2))
+            .unwrap();
+
+        for line in contents.lines() {
+            //let split_lines: Vec<&str> = line.split('\t').collect();
+            if let Some((status, task)) = line.split_once('\t') {
+                if status == "[ ]" {
+                    //println!("{}\t{}", status, task);
+                    let task_to_print = format!("{}\t{}", status, task);
+                    stdout.queue(Print(&task_to_print)).unwrap();
+                }
             }
         }
-    }
-    stdout.flush()?;
+        stdout.flush()?;
 
-    println!("{}", contents);
+        if event::poll(Duration::from_millis(50))? {
+            match event::read()? {
+                event::Event::Key(event) => match event.code {
+                    event::KeyCode::Char('q') => break,
+                    _ => (),
+                },
+                _ => (),
+                // Event::Resize(width, height) => println!("New size {}x{}", width, height),
+            }
+        }
+        // Add a small delay to reduce CPU usage and prevent flickering
+        sleep(Duration::from_millis(50));
+    }
+    let _ = disable_raw_mode();
     Ok(())
 }
 
