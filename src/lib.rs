@@ -1,8 +1,13 @@
-use std::env;
+use crossterm::{
+    cursor,
+    style::{self, Stylize},
+    terminal, ExecutableCommand, QueueableCommand,
+};
 use std::error::Error;
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::PathBuf;
+use std::{env, io::Read};
 
 #[derive(Debug)]
 pub enum Status {
@@ -22,9 +27,10 @@ impl Task {
         assert!(args.len() < 3);
 
         if args.len() == 1 {
-            let _ = prints_todo(path).unwrap_or_else(|_| {
-                println!("No todo file found. \nConsider: td init");
-            });
+            let _ = main_tui(path);
+            //let _ = prints_todo(path).unwrap_or_else(|_| {
+            //    println!("No todo file found. \nConsider: td init");
+            //});
             Ok(())
         } else {
             let todo_instance = Task {
@@ -38,7 +44,7 @@ impl Task {
 }
 
 /// prints current todos to std_out
-pub fn prints_todo(path: PathBuf) -> Result<(), Box<dyn Error>> {
+fn prints_todo(path: PathBuf) -> Result<(), Box<dyn Error>> {
     let todos = fs::read_to_string(path)?;
 
     //TODO: make it a terminal user interface with crossterm i think idk -> start by clearing the
@@ -51,6 +57,40 @@ pub fn prints_todo(path: PathBuf) -> Result<(), Box<dyn Error>> {
             }
         }
     }
+    Ok(())
+}
+
+fn main_tui(path: PathBuf) -> io::Result<()> {
+    let mut stdout = io::stdout();
+
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .read(true)
+        .create(true)
+        .open(path)
+        .unwrap();
+
+    // init empty string
+    let mut contents: String = String::new();
+    //return the amount of bytes appended to contents string <- useless
+    let _ = file.read_to_string(&mut contents);
+
+    //clears terminal
+    stdout.execute(terminal::Clear(terminal::ClearType::All))?;
+
+    for y in 0..40 {
+        for x in 0..150 {
+            if (y == 0 || y == 40 - 1) || (x == 0 || x == 150 - 1) {
+                // in this loop we are more efficient by not flushing the buffer.
+                stdout
+                    .queue(cursor::MoveTo(x, y))?
+                    .queue(style::PrintStyledContent("█".magenta()))?;
+            }
+        }
+    }
+    stdout.flush()?;
+
+    println!("{}", contents);
     Ok(())
 }
 
