@@ -1,9 +1,8 @@
+use std::env;
 use std::error::Error;
 use std::fs;
 use std::io::Write;
-
-#[cfg(test)]
-mod tests;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum Status {
@@ -19,7 +18,7 @@ pub struct Task {
 
 impl Task {
     /// Builds todo struct
-    pub fn build(args: &[String], path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn build(args: &[String], path: PathBuf) -> Result<(), Box<dyn Error>> {
         assert!(args.len() < 3);
 
         if args.len() == 1 {
@@ -39,7 +38,7 @@ impl Task {
 }
 
 /// prints current todos to std_out
-pub fn prints_todo(path: &str) -> Result<(), Box<dyn Error>> {
+pub fn prints_todo(path: PathBuf) -> Result<(), Box<dyn Error>> {
     let todos = fs::read_to_string(path)?;
 
     //TODO: make it a terminal user interface with crossterm i think idk -> start by clearing the
@@ -56,7 +55,7 @@ pub fn prints_todo(path: &str) -> Result<(), Box<dyn Error>> {
 }
 
 /// appends new todo to the end of todo file
-pub fn write_todo(path: &str, todo: Task) {
+pub fn write_todo(path: PathBuf, todo: Task) {
     //TODO: use write(true) instead of append(true) and rewrite the entire file similar to the
     //run() function. Further, print the line number at the uttermost left which we might be able
     //to use to delete or set todos as done
@@ -73,4 +72,13 @@ pub fn write_todo(path: &str, todo: Task) {
         }
         Err(i) => println!("Error writing to file: {}", i),
     }
+}
+
+pub fn get_todo_file_path() -> PathBuf {
+    let home_dir = env::var("HOME").unwrap_or_else(|_| String::from("."));
+    let mut path = PathBuf::from(home_dir);
+    path.push(".todo_app");
+    fs::create_dir_all(&path).expect("Failed to create directory");
+    path.push("todos.txt");
+    path
 }
