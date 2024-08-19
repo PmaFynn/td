@@ -1,13 +1,10 @@
 use std::env;
 use td;
 
-#[cfg(test)]
-mod tests;
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     //TODO: make that dynamic instead of hardcoded for me
-    let todo_path: &str = "/home/fynn/.todos.txt";
+    let todo_path = td::get_todo_file_path();
     if args.len() > 2 {
         println!(
             "A simple to use, minimal and idomatic rust todo cli\n
