@@ -124,7 +124,8 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         status: Status::Open,
     };
 
-    let mut x_todo = contents.lines().count();
+    let mut x_todo = 0;
+    //let mut x_todo = contents.lines().count();
 
     while exit {
         let current_window = Win {
@@ -162,6 +163,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         //TODO: height should not be 0 here but at least the height of the first line
         stdout.queue(cursor::MoveTo(1, 1)).unwrap();
         stdout.queue(cursor::MoveToNextLine(1)).unwrap();
+        x_todo = 0;
         for (i, line) in contents.lines().enumerate() {
             //let split_lines: Vec<&str> = line.split('\t').collect();
 
@@ -169,6 +171,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 if status == "[ ]" {
                     //println!("{}\t{}", status, task);
                     //println!("i is {}, while pos.row is {}", i, pos.row - 2);
+                    x_todo += 1;
                     let task_to_print = format!("{}\t{}", status, task);
                     if pos.row == (i + 2) as u16 {
                         let style = style(&task_to_print).with(Color::Black).on(Color::Grey);
