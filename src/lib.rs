@@ -168,20 +168,25 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
             //let split_lines: Vec<&str> = line.split('\t').collect();
 
             if let Some((status, task)) = line.split_once('\t') {
-                if status == "[ ]" {
-                    //println!("{}\t{}", status, task);
-                    //println!("i is {}, while pos.row is {}", i, pos.row - 2);
-                    x_todo += 1;
-                    let task_to_print = format!("{}\t{}", status, task);
-                    if pos.row == (i + 2) as u16 {
-                        let style = style(&task_to_print).with(Color::Black).on(Color::Grey);
-                        stdout
-                            .queue(PrintStyledContent(style))
-                            .expect("failed to print styled line");
+                if true {
+                    if status == "[ ]" {
+                        //println!("{}\t{}", status, task);
+                        //println!("i is {}, while pos.row is {}", i, pos.row - 2);
+                        x_todo += 1;
+                        let task_to_print = format!("{}\t{}", status, task);
+                        if pos.row == (i + 2) as u16 {
+                            let style = style(&task_to_print).with(Color::Black).on(Color::Grey);
+                            stdout
+                                .queue(PrintStyledContent(style))
+                                .expect("failed to print styled line");
+                        } else {
+                            stdout.queue(Print(&task_to_print)).unwrap();
+                        }
+                        stdout.queue(cursor::MoveToNextLine(1)).unwrap();
                     } else {
-                        stdout.queue(Print(&task_to_print)).unwrap();
+                        //TODO: only increment one x_todo depending on which status
+                        x_todo += 1;
                     }
-                    stdout.queue(cursor::MoveToNextLine(1)).unwrap();
                 }
             }
         }
