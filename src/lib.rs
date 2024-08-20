@@ -1,5 +1,6 @@
 use crossterm::{
-    cursor, event,
+    cursor::{self, SavePosition},
+    event,
     style::{self, style, Attribute, Color, Print, PrintStyledContent, Stylize},
     terminal::{self, disable_raw_mode, enable_raw_mode, size, window_size, WindowSize},
     ExecutableCommand, QueueableCommand,
@@ -54,11 +55,19 @@ struct Win {
     rows: u16,
 }
 
+enum Modification {
+    Default,
+    Delete,
+    Rename,
+    SwitchStatus,
+}
+
 struct Pos {
     row: u16,
     col: u16,
     status: Status,
     mod_row: i8,
+    modifier: Modification,
 }
 
 impl Pos {
@@ -116,19 +125,14 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         col: 1,
         status: Status::Open,
         mod_row: -1,
+        modifier: Modification::Default,
     };
 
-    let mut x_todo = 0;
     //let mut x_todo = contents.lines().count();
     let base_open_style = "Open".with(Color::White);
     let base_done_style = "Done".with(Color::White);
 
     while exit {
-        //TODO: decide if needed or not? -> I think it isnt
-        //let current_window = Win {
-        //    rows: size().unwrap().0,
-        //    cols: size().unwrap().1,
-        //};
         stdout.queue(terminal::Clear(terminal::ClearType::All))?;
 
         //TODO: current_window.cols -> each col is a character so str.len() of 5 is 5 cols -> fix
@@ -163,7 +167,8 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
 
         let string_file: String = String::new();
 
-        x_todo = 0;
+        let mut x_visible = 0;
+
         for (i, line) in contents.lines().enumerate() {
             //let split_lines: Vec<&str> = line.split('\t').collect();
             if let Some((status, task)) = line.split_once('\t') {
@@ -171,10 +176,9 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     || (pos.status == Status::Done && status == "[X]");
 
                 if matches_status {
-                    x_todo += 1;
+                    x_visible += 1;
                     let task_to_print = format!("{}\t{}", status, task);
 
-                    if pos.mod_row == (i + 2) as i8 {}
                     let style_task = if pos.row == (i + 2) as u16 {
                         //style(&task_to_print).with(Color::Black).on(Color::Grey)
                         style(&task_to_print).attribute(Attribute::Bold)
@@ -197,13 +201,13 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
 
         stdout.flush()?;
 
-        //this waits until event happens
+        //this waits until event happes
         match event::read()? {
             event::Event::Key(event) => match event.code {
                 event::KeyCode::Char('q') => exit = false,
                 event::KeyCode::Char('j') => {
                     //TODO: call function that does the navigation
-                    pos.one_down((x_todo + 1) as u16);
+                    pos.one_down((x_visible + 1) as u16);
                 }
                 event::KeyCode::Char('k') => {
                     //TODO: call function that does the navigation
@@ -212,18 +216,33 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 event::KeyCode::Tab => {
                     //TODO: call function that does the navigation to the right -> pos.status =
                     //Status::Open
+                    //HACK: maybe we need to go the first line when switching due to it being more
+                    //easy
                     pos.switch_status();
+                    ()
+                }
+                event::KeyCode::Char('r') => {
+                    //TODO: should move currently highlighted todo to other side
+                    pos.mod_row = pos.row as i8;
+                    pos.modifier = Modification::Rename;
+                    ()
+                }
+                event::KeyCode::Char('d') => {
+                    //TODO: should move currently highlighted todo to other side
+                    pos.mod_row = pos.row as i8;
+                    pos.modifier = Modification::Delete;
                     ()
                 }
                 event::KeyCode::Enter => {
                     //TODO: should move currently highlighted todo to other side
                     pos.mod_row = pos.row as i8;
+                    pos.modifier = Modification::SwitchStatus;
                     ()
                 }
                 event::KeyCode::Char('l') => {
                     //TODO: call function that does the navigation to the left -> pos.status =
                     //Status::Done
-                    pos.status = Status::Done;
+                    pos.switch_status();
                     ()
                 }
                 event::KeyCode::Char('a') => {
@@ -234,6 +253,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
             },
             _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
         }
+        contents = modification(&mut pos, &contents);
         stdout
             .queue(cursor::MoveToRow(pos.row))
             .expect("error moving to new line after navigation");
@@ -250,7 +270,31 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         stdout.queue(cursor::Show)?;
         let _ = disable_raw_mode();
     }
+
+    //TODO: overwrite todo file with new content
+
     Ok(())
+}
+
+fn modification(pos: &mut Pos, contents: &String) -> String {
+    let mut lines: Vec<&str> = contents.lines().collect();
+    match pos.modifier {
+        Modification::Delete => {
+            //TODO: perhaps only let one remove a todo if it is status == done?
+            //FIX: doesnt work as intended
+            //might actually be harder than i thought. The problem is that we get different rows
+            //for done and open
+            //-> perhaps use differnt files for open and done
+            if pos.status == Status::Done && pos.mod_row != -1 as i8 {
+                lines.remove((pos.mod_row - 2) as usize);
+                pos.mod_row = -1;
+                pos.modifier = Modification::Default;
+            }
+        }
+        //TODO: write other modifications
+        _ => (),
+    }
+    lines.join("\n")
 }
 
 /// appends new todo to the end of todo file
