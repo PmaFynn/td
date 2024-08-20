@@ -1,16 +1,19 @@
 use crossterm::{
     cursor, event,
-    style::{self, Print, Stylize},
+    style::{self, style, Attribute, Color, Print, PrintStyledContent, Stylize},
     terminal::{self, disable_raw_mode, enable_raw_mode, size, window_size, WindowSize},
     ExecutableCommand, QueueableCommand,
 };
-use std::io::{self, Write};
-use std::path::PathBuf;
-use std::thread::sleep;
 use std::time::Duration;
 use std::{env, io::Read};
 use std::{error::Error, io::stdout};
+use std::{
+    fmt::format,
+    io::{self, Write},
+};
 use std::{fs, os::unix::process};
+use std::{path::PathBuf, u16};
+use std::{thread::sleep, usize};
 
 #[derive(Debug)]
 pub enum Status {
@@ -64,8 +67,34 @@ fn prints_todo(path: PathBuf) -> Result<(), Box<dyn Error>> {
 }
 
 struct Win {
-    width: u16,
-    height: u16,
+    cols: u16,
+    rows: u16,
+}
+
+struct Pos {
+    row: u16,
+    col: u16,
+    status: Status,
+}
+
+impl Pos {
+    fn set_pos(&mut self, col: u16, row: u16) -> &mut Self {
+        self.col = col;
+        self.row = row;
+        self
+    }
+    fn one_down(&mut self, max_row: u16) -> &mut Self {
+        if self.row < max_row {
+            self.row += 1;
+        }
+        self
+    }
+    fn one_up(&mut self) -> &mut Self {
+        if self.row > 2 {
+            self.row -= 1;
+        }
+        self
+    }
 }
 
 fn main_tui(path: PathBuf) -> io::Result<()> {
@@ -74,6 +103,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
 
     // I dont think I need this
     let _ = enable_raw_mode();
+    stdout.queue(cursor::Hide)?;
 
     let mut file = fs::OpenOptions::new()
         .write(true)
@@ -82,96 +112,130 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         .open(path)
         .unwrap();
 
+    let mut exit = true;
+
     let mut contents: String = String::new();
     //returns the amount of bytes appended to contents string <- useless
     let _ = file.read_to_string(&mut contents);
 
-    loop {
+    let mut pos = Pos {
+        row: 2,
+        col: 1,
+        status: Status::Open,
+    };
+
+    let mut x_todo = contents.lines().count();
+
+    while exit {
         let current_window = Win {
-            width: size().unwrap().0,
-            height: size().unwrap().1,
+            rows: size().unwrap().0,
+            cols: size().unwrap().1,
         };
-        // Move the cursor to position (5, 5)
         stdout.queue(terminal::Clear(terminal::ClearType::All))?;
+
+        let headline: &str = "Open\tDone";
+        let mut open_styled = "Open"
+            .with(Color::Yellow)
+            .on(Color::Blue)
+            .attribute(Attribute::Bold);
+        let mut done_styled = "Done"
+            .with(Color::Yellow)
+            .on(Color::Blue)
+            .attribute(Attribute::Bold);
+
+        //FIX: does not appear in the middle
         stdout
-            .queue(cursor::MoveTo(current_window.width / 2, 0))
+            //.queue(cursor::MoveTo(
+            //    (current_window.cols / 2) - (headline.len() / 2) as u16,
+            //    0,
+            //))
+            .queue(cursor::MoveTo(
+                (current_window.cols / 2) - (headline.len() / 2) as u16,
+                0,
+            ))
             .unwrap();
-        stdout.queue(Print("Open\tDone")).unwrap();
+
+        //TODO: current_window.cols -> each col is a character so str.len() of 5 is 5 cols -> fix
+        //it
+        stdout.queue(PrintStyledContent(open_styled)).unwrap();
 
         //TODO: height should not be 0 here but at least the height of the first line
-        stdout.queue(cursor::MoveTo(0, 0)).unwrap();
-        stdout.queue(cursor::MoveToNextLine(2)).unwrap();
-        for line in contents.lines() {
+        stdout.queue(cursor::MoveTo(1, 1)).unwrap();
+        stdout.queue(cursor::MoveToNextLine(1)).unwrap();
+        for (i, line) in contents.lines().enumerate() {
             //let split_lines: Vec<&str> = line.split('\t').collect();
+
             if let Some((status, task)) = line.split_once('\t') {
                 if status == "[ ]" {
                     //println!("{}\t{}", status, task);
+                    //println!("i is {}, while pos.row is {}", i, pos.row - 2);
                     let task_to_print = format!("{}\t{}", status, task);
-                    stdout.queue(Print(&task_to_print)).unwrap();
+                    if pos.row == (i + 2) as u16 {
+                        let style = style(&task_to_print).with(Color::Black).on(Color::Grey);
+                        stdout
+                            .queue(PrintStyledContent(style))
+                            .expect("failed to print styled line");
+                    } else {
+                        stdout.queue(Print(&task_to_print)).unwrap();
+                    }
                     stdout.queue(cursor::MoveToNextLine(1)).unwrap();
                 }
             }
         }
+
+        //move back to real position
+        stdout
+            .queue(cursor::MoveTo(pos.row, pos.col))
+            .expect("error while moving cursor back to current position");
+
         stdout.flush()?;
 
+        //this waits until event happens
         match event::read()? {
             event::Event::Key(event) => match event.code {
-                event::KeyCode::Char('q') => break,
+                event::KeyCode::Char('q') => exit = false,
+                event::KeyCode::Char('j') => {
+                    //TODO: call function that does the navigation
+                    pos.one_down((x_todo + 1) as u16);
+                }
+                event::KeyCode::Char('k') => {
+                    //TODO: call function that does the navigation
+                    pos.one_up();
+                }
+                event::KeyCode::Char('h') => {
+                    //TODO: call function that does the navigation to the right -> pos.status =
+                    //Status::Open
+                    ()
+                }
+                event::KeyCode::Char('l') => {
+                    //TODO: call function that does the navigation to the left -> pos.status =
+                    //Status::Done
+                    ()
+                }
+                event::KeyCode::Char('a') => {
+                    //TODO: call function that lets one insert new todo at current position
+                    ()
+                }
                 _ => {}
             },
             _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
         }
+        stdout
+            .queue(cursor::MoveToRow(pos.row))
+            .expect("error moving to new line after navigation");
+
         // Add a small delay to reduce CPU usage and prevent flickering
         sleep(Duration::from_millis(50));
     }
-    let _ = disable_raw_mode();
-    Ok(())
-}
 
-fn prints_current(path: PathBuf) -> io::Result<()> {
-    let mut stdout = io::stdout();
-
-    // I dont think I need this
-    let _ = enable_raw_mode();
-
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .read(true)
-        .create(true)
-        .open(path)
-        .unwrap();
-
-    let mut contents: String = String::new();
-    //returns the amount of bytes appended to contents string <- useless
-    let _ = file.read_to_string(&mut contents);
-
-    let current_window = Win {
-        width: size().unwrap().0,
-        height: size().unwrap().1,
-    };
-    // Move the cursor to position (5, 5)
-    stdout.queue(terminal::Clear(terminal::ClearType::All))?;
-    stdout
-        .queue(cursor::MoveTo(current_window.width / 2, 0))
-        .unwrap();
-    stdout.queue(Print("Open\tDone")).unwrap();
-
-    //TODO: height should not be 0 here but at least the height of the first line
-    stdout.queue(cursor::MoveTo(0, 0)).unwrap();
-    stdout.queue(cursor::MoveToNextLine(2)).unwrap();
-    for line in contents.lines() {
-        //let split_lines: Vec<&str> = line.split('\t').collect();
-        if let Some((status, task)) = line.split_once('\t') {
-            if status == "[ ]" {
-                //println!("{}\t{}", status, task);
-                let task_to_print = format!("{}\t{}", status, task);
-                stdout.queue(Print(&task_to_print)).unwrap();
-                stdout.queue(cursor::MoveToNextLine(1)).unwrap();
-            }
-        }
+    //clean up stuff
+    {
+        stdout.queue(terminal::Clear(terminal::ClearType::All))?;
+        stdout.queue(cursor::MoveTo(0, 0))?;
+        stdout.flush()?;
+        stdout.queue(cursor::Show)?;
+        let _ = disable_raw_mode();
     }
-    stdout.flush()?;
-
     Ok(())
 }
 
