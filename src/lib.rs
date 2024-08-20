@@ -4,7 +4,6 @@ use crossterm::{
     terminal::{self, disable_raw_mode, enable_raw_mode, size, window_size, WindowSize},
     ExecutableCommand, QueueableCommand,
 };
-use std::time::Duration;
 use std::{env, io::Read};
 use std::{error::Error, io::stdout};
 use std::{
@@ -12,10 +11,11 @@ use std::{
     io::{self, Write},
 };
 use std::{fs, os::unix::process};
+use std::{io::Stdout, time::Duration};
 use std::{path::PathBuf, u16};
 use std::{thread::sleep, usize};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Status {
     Done,
     Open,
@@ -49,23 +49,6 @@ impl Task {
     }
 }
 
-/// prints current todos to std_out
-fn prints_todo(path: PathBuf) -> Result<(), Box<dyn Error>> {
-    let todos = fs::read_to_string(path)?;
-
-    //TODO: make it a terminal user interface with crossterm i think idk -> start by clearing the
-    //terminal before displaying the todos
-    for line in todos.lines() {
-        //let split_lines: Vec<&str> = line.split('\t').collect();
-        if let Some((status, task)) = line.split_once('\t') {
-            if status == "[ ]" {
-                println!("{}\t{}", status, task);
-            }
-        }
-    }
-    Ok(())
-}
-
 struct Win {
     cols: u16,
     rows: u16,
@@ -75,6 +58,7 @@ struct Pos {
     row: u16,
     col: u16,
     status: Status,
+    mod_row: i8,
 }
 
 impl Pos {
@@ -92,6 +76,15 @@ impl Pos {
     fn one_up(&mut self) -> &mut Self {
         if self.row > 2 {
             self.row -= 1;
+        }
+        self
+    }
+    //TODO: switch this function for a trait implementation of Not for Status and then just to
+    //pos.status = !pos.status;
+    fn switch_status(&mut self) -> &mut Self {
+        match self.status {
+            Status::Done => self.status = Status::Open,
+            Status::Open => self.status = Status::Done,
         }
         self
     }
@@ -122,71 +115,77 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         row: 2,
         col: 1,
         status: Status::Open,
+        mod_row: -1,
     };
 
     let mut x_todo = 0;
     //let mut x_todo = contents.lines().count();
+    let base_open_style = "Open".with(Color::White);
+    let base_done_style = "Done".with(Color::White);
 
     while exit {
-        let current_window = Win {
-            rows: size().unwrap().0,
-            cols: size().unwrap().1,
-        };
+        //TODO: decide if needed or not? -> I think it isnt
+        //let current_window = Win {
+        //    rows: size().unwrap().0,
+        //    cols: size().unwrap().1,
+        //};
         stdout.queue(terminal::Clear(terminal::ClearType::All))?;
-
-        let headline: &str = "Open\tDone";
-        let mut open_styled = "Open"
-            .with(Color::Yellow)
-            .on(Color::Blue)
-            .attribute(Attribute::Bold);
-        let mut done_styled = "Done"
-            .with(Color::Yellow)
-            .on(Color::Blue)
-            .attribute(Attribute::Bold);
-
-        //FIX: does not appear in the middle
-        stdout
-            //.queue(cursor::MoveTo(
-            //    (current_window.cols / 2) - (headline.len() / 2) as u16,
-            //    0,
-            //))
-            .queue(cursor::MoveTo(
-                (current_window.cols / 2) - (headline.len() / 2) as u16,
-                0,
-            ))
-            .unwrap();
 
         //TODO: current_window.cols -> each col is a character so str.len() of 5 is 5 cols -> fix
         //it
+        stdout.queue(cursor::MoveTo(0, 0)).unwrap();
+        //done_styled = done_styled.attribute(Attribute::Reset);
+        //open_styled = open_styled.attribute(Attribute::Reset);
+
+        // Re-initialize the styles to their base state at the start of each iteration
+        let mut done_styled = base_done_style;
+        let mut open_styled = base_open_style;
+
+        // Apply status-specific styles
+        match pos.status {
+            Status::Done => {
+                done_styled = done_styled.attribute(Attribute::Bold);
+                open_styled = open_styled.attribute(Attribute::Dim);
+            }
+            Status::Open => {
+                done_styled = done_styled.attribute(Attribute::Dim);
+                open_styled = open_styled.attribute(Attribute::Bold);
+            }
+        }
+
         stdout.queue(PrintStyledContent(open_styled)).unwrap();
+        stdout.queue(Print("\t")).unwrap();
+        stdout.queue(PrintStyledContent(done_styled)).unwrap();
 
         //TODO: height should not be 0 here but at least the height of the first line
         stdout.queue(cursor::MoveTo(1, 1)).unwrap();
         stdout.queue(cursor::MoveToNextLine(1)).unwrap();
+
+        let string_file: String = String::new();
+
         x_todo = 0;
         for (i, line) in contents.lines().enumerate() {
             //let split_lines: Vec<&str> = line.split('\t').collect();
-
             if let Some((status, task)) = line.split_once('\t') {
-                if true {
-                    if status == "[ ]" {
-                        //println!("{}\t{}", status, task);
-                        //println!("i is {}, while pos.row is {}", i, pos.row - 2);
-                        x_todo += 1;
-                        let task_to_print = format!("{}\t{}", status, task);
-                        if pos.row == (i + 2) as u16 {
-                            let style = style(&task_to_print).with(Color::Black).on(Color::Grey);
-                            stdout
-                                .queue(PrintStyledContent(style))
-                                .expect("failed to print styled line");
-                        } else {
-                            stdout.queue(Print(&task_to_print)).unwrap();
-                        }
-                        stdout.queue(cursor::MoveToNextLine(1)).unwrap();
+                let matches_status = (pos.status == Status::Open && status == "[ ]")
+                    || (pos.status == Status::Done && status == "[X]");
+
+                if matches_status {
+                    x_todo += 1;
+                    let task_to_print = format!("{}\t{}", status, task);
+
+                    if pos.mod_row == (i + 2) as i8 {}
+                    let style_task = if pos.row == (i + 2) as u16 {
+                        //style(&task_to_print).with(Color::Black).on(Color::Grey)
+                        style(&task_to_print).attribute(Attribute::Bold)
                     } else {
-                        //TODO: only increment one x_todo depending on which status
-                        x_todo += 1;
-                    }
+                        style(&task_to_print).attribute(Attribute::Dim)
+                    };
+
+                    stdout
+                        .queue(PrintStyledContent(style_task))
+                        .expect("failed to print styled line");
+                    stdout.queue(cursor::MoveToNextLine(1)).unwrap();
                 }
             }
         }
@@ -210,14 +209,21 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     //TODO: call function that does the navigation
                     pos.one_up();
                 }
-                event::KeyCode::Char('h') => {
+                event::KeyCode::Tab => {
                     //TODO: call function that does the navigation to the right -> pos.status =
                     //Status::Open
+                    pos.switch_status();
+                    ()
+                }
+                event::KeyCode::Enter => {
+                    //TODO: should move currently highlighted todo to other side
+                    pos.mod_row = pos.row as i8;
                     ()
                 }
                 event::KeyCode::Char('l') => {
                     //TODO: call function that does the navigation to the left -> pos.status =
                     //Status::Done
+                    pos.status = Status::Done;
                     ()
                 }
                 event::KeyCode::Char('a') => {
