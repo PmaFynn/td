@@ -165,11 +165,12 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         stdout.queue(cursor::MoveTo(1, 1)).unwrap();
         stdout.queue(cursor::MoveToNextLine(1)).unwrap();
 
-        let string_file: String = String::new();
+        // TODO: Think i can remove that, cant i?
+        // let string_file: String = String::new();
 
         let mut x_visible = 0;
 
-        for (i, line) in contents.lines().enumerate() {
+        for line in contents.lines() {
             //let split_lines: Vec<&str> = line.split('\t').collect();
             if let Some((status, task)) = line.split_once('\t') {
                 let matches_status = (pos.status == Status::Open && status == "[ ]")
@@ -179,8 +180,13 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     x_visible += 1;
                     let task_to_print = format!("{}\t{}", status, task);
 
-                    let style_task = if pos.row == (i + 2) as u16 {
-                        //style(&task_to_print).with(Color::Black).on(Color::Grey)
+                    //PERF: geistesblitz in letzter sekunde -> try to somehow incoroporate the same
+                    //logic for delete,rename etc
+                    let style_task = if pos.row
+                        == cursor::position()
+                            .expect("error while trying to get cursor position")
+                            .1
+                    {
                         style(&task_to_print).attribute(Attribute::Bold)
                     } else {
                         style(&task_to_print).attribute(Attribute::Dim)
