@@ -5,7 +5,7 @@ use crossterm::{
     terminal::{self, disable_raw_mode, enable_raw_mode, size, window_size, WindowSize},
     ExecutableCommand, QueueableCommand,
 };
-use std::{env, io::Read};
+use std::{env, io::Read, os::linux::raw::stat};
 use std::{error::Error, io::stdout};
 use std::{
     fmt::format,
@@ -50,11 +50,12 @@ impl Task {
     }
 }
 
-struct Win {
-    cols: u16,
-    rows: u16,
-}
+//struct Win {
+//    cols: u16,
+//    rows: u16,
+//}
 
+#[derive(PartialEq)]
 enum Modification {
     Default,
     Delete,
@@ -71,11 +72,11 @@ struct Pos {
 }
 
 impl Pos {
-    fn set_pos(&mut self, col: u16, row: u16) -> &mut Self {
-        self.col = col;
-        self.row = row;
-        self
-    }
+    //fn set_pos(&mut self, col: u16, row: u16) -> &mut Self {
+    //    self.col = col;
+    //    self.row = row;
+    //    self
+    //}
     fn one_down(&mut self, max_row: u16) -> &mut Self {
         if self.row < max_row {
             self.row += 1;
@@ -90,10 +91,18 @@ impl Pos {
     }
     //TODO: switch this function for a trait implementation of Not for Status and then just to
     //pos.status = !pos.status;
-    fn switch_status(&mut self) -> &mut Self {
+    //FIX: does not yet work as intended as it sometimes jumps to the first line even though it
+    //could stay at the line -> has to do with the row being two bigger than the length i think
+    fn switch_status(&mut self, len: u16) -> &mut Self {
         match self.status {
-            Status::Done => self.status = Status::Open,
-            Status::Open => self.status = Status::Done,
+            Status::Done => {
+                self.status = Status::Open;
+                self.row = std::cmp::min(len, self.row);
+            }
+            Status::Open => {
+                self.status = Status::Done;
+                self.row = std::cmp::min(len, self.row);
+            }
         }
         self
     }
@@ -112,13 +121,15 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         .read(true)
         .create(true)
         .open(path)
-        .unwrap();
+        .expect("error while trying to set options for opening file or opening file itself");
 
     let mut exit = true;
 
     let mut contents: String = String::new();
     //returns the amount of bytes appended to contents string <- useless
+    // contents is the important thing
     let _ = file.read_to_string(&mut contents);
+    let mut todo_list: Vec<&str> = contents.lines().collect();
 
     let mut pos = Pos {
         row: 2,
@@ -133,6 +144,8 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     let base_done_style = "Done".with(Color::White);
 
     while exit {
+        // let mut todo_list: Vec<&str> = contents.lines().collect();
+
         stdout.queue(terminal::Clear(terminal::ClearType::All))?;
 
         //TODO: current_window.cols -> each col is a character so str.len() of 5 is 5 cols -> fix
@@ -169,9 +182,10 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         // let string_file: String = String::new();
 
         let mut x_visible = 0;
+        let mut x_all = 0;
 
-        for line in contents.lines() {
-            //let split_lines: Vec<&str> = line.split('\t').collect();
+        for line in &todo_list {
+            x_all += 1;
             if let Some((status, task)) = line.split_once('\t') {
                 let matches_status = (pos.status == Status::Open && status == "[ ]")
                     || (pos.status == Status::Done && status == "[X]");
@@ -200,6 +214,36 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
             }
         }
 
+        //for line in contents.lines() {
+        //    //let split_lines: Vec<&str> = line.split('\t').collect();
+        //    if let Some((status, task)) = line.split_once('\t') {
+        //        let matches_status = (pos.status == Status::Open && status == "[ ]")
+        //            || (pos.status == Status::Done && status == "[X]");
+        //
+        //        if matches_status {
+        //            x_visible += 1;
+        //            let task_to_print = format!("{}\t{}", status, task);
+        //
+        //            //PERF: geistesblitz in letzter sekunde -> try to somehow incoroporate the same
+        //            //logic for delete,rename etc
+        //            let style_task = if pos.row
+        //                == cursor::position()
+        //                    .expect("error while trying to get cursor position")
+        //                    .1
+        //            {
+        //                style(&task_to_print).attribute(Attribute::Bold)
+        //            } else {
+        //                style(&task_to_print).attribute(Attribute::Dim)
+        //            };
+        //
+        //            stdout
+        //                .queue(PrintStyledContent(style_task))
+        //                .expect("failed to print styled line");
+        //            stdout.queue(cursor::MoveToNextLine(1)).unwrap();
+        //        }
+        //    }
+        //}
+
         //move back to real position
         stdout
             .queue(cursor::MoveTo(pos.row, pos.col))
@@ -224,7 +268,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     //Status::Open
                     //HACK: maybe we need to go the first line when switching due to it being more
                     //easy
-                    pos.switch_status();
+                    pos.switch_status((x_all - x_visible + 1) as u16);
                     ()
                 }
                 event::KeyCode::Char('r') => {
@@ -245,10 +289,16 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     pos.modifier = Modification::SwitchStatus;
                     ()
                 }
+                event::KeyCode::Char('h') => {
+                    //TODO: call function that does the navigation to the left -> pos.status =
+                    //Status::Done
+                    pos.switch_status((x_all - x_visible + 1) as u16);
+                    ()
+                }
                 event::KeyCode::Char('l') => {
                     //TODO: call function that does the navigation to the left -> pos.status =
                     //Status::Done
-                    pos.switch_status();
+                    pos.switch_status((x_all - x_visible + 1) as u16);
                     ()
                 }
                 event::KeyCode::Char('a') => {
@@ -259,13 +309,17 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
             },
             _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
         }
-        contents = modification(&mut pos, &contents);
+
+        if pos.modifier != Modification::Default {
+            modification(&mut pos, todo_list.clone());
+        }
+
         stdout
             .queue(cursor::MoveToRow(pos.row))
             .expect("error moving to new line after navigation");
 
         // Add a small delay to reduce CPU usage and prevent flickering
-        sleep(Duration::from_millis(50));
+        sleep(Duration::from_millis(150));
     }
 
     //clean up stuff
@@ -282,26 +336,39 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     Ok(())
 }
 
-fn modification(pos: &mut Pos, contents: &String) -> String {
-    let mut lines: Vec<&str> = contents.lines().collect();
+fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&str>) {
     match pos.modifier {
         Modification::Delete => {
-            //TODO: perhaps only let one remove a todo if it is status == done?
-            //FIX: doesnt work as intended
-            //might actually be harder than i thought. The problem is that we get different rows
-            //for done and open
-            //-> perhaps use differnt files for open and done
             if pos.status == Status::Done && pos.mod_row != -1 as i8 {
-                lines.remove((pos.mod_row - 2) as usize);
+                todo_list.remove((pos.mod_row - 2) as usize);
                 pos.mod_row = -1;
                 pos.modifier = Modification::Default;
             }
         }
-        //TODO: write other modifications
         _ => (),
     }
-    lines.join("\n")
 }
+
+//fn modification<'a>(pos: &mut Pos, todo_list: &'a mut Vec<&'a str>) -> Vec<&'a str> {
+//    match pos.modifier {
+//        Modification::Delete => {
+//            //TODO: perhaps only let one remove a todo if it is status == done?
+//            //FIX: doesnt work as intended
+//            //might actually be harder than i thought. The problem is that we get different rows
+//            //for done and open
+//            //-> perhaps use differnt files for open and done
+//            if pos.status == Status::Done && pos.mod_row != -1 as i8 {
+//                todo_list.remove((pos.mod_row - 2) as usize);
+//                pos.mod_row = -1;
+//                pos.modifier = Modification::Default;
+//            }
+//        }
+//        //TODO: write other modifications
+//        _ => (),
+//    }
+//    //creates new vec to return
+//    todo_list.to_vec()
+//}
 
 /// appends new todo to the end of todo file
 pub fn write_todo(path: PathBuf, todo: Task) {
