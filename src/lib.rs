@@ -344,7 +344,6 @@ fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&'a str>) -> Vec<&'a str> 
                 //FIX: as of yet this deletes the element of vec at index x but this index x refers
                 //to the index of the visible element. We need to the non-vible index of the time
                 //to delete the correct one
-                println!("Im in here2");
                 todo_list.remove((pos.mod_row - 2) as usize);
                 pos.mod_row = -1;
                 pos.modifier = Modification::Default;
