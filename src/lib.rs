@@ -275,18 +275,21 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     //TODO: should move currently highlighted todo to other side
                     pos.mod_row = pos.row as i8;
                     pos.modifier = Modification::Rename;
+                    todo_list = modification(&mut pos, todo_list.clone());
                     ()
                 }
                 event::KeyCode::Char('d') => {
                     //TODO: should move currently highlighted todo to other side
                     pos.mod_row = pos.row as i8;
                     pos.modifier = Modification::Delete;
+                    todo_list = modification(&mut pos, todo_list.clone());
                     ()
                 }
                 event::KeyCode::Enter => {
                     //TODO: should move currently highlighted todo to other side
                     pos.mod_row = pos.row as i8;
                     pos.modifier = Modification::SwitchStatus;
+                    todo_list = modification(&mut pos, todo_list.clone());
                     ()
                 }
                 event::KeyCode::Char('h') => {
@@ -310,9 +313,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
             _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
         }
 
-        if pos.modifier != Modification::Default {
-            modification(&mut pos, todo_list.clone());
-        }
+        println!("{:?}", todo_list);
 
         stdout
             .queue(cursor::MoveToRow(pos.row))
@@ -336,10 +337,14 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     Ok(())
 }
 
-fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&str>) {
+fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&'a str>) -> Vec<&'a str> {
     match pos.modifier {
         Modification::Delete => {
             if pos.status == Status::Done && pos.mod_row != -1 as i8 {
+                //FIX: as of yet this deletes the element of vec at index x but this index x refers
+                //to the index of the visible element. We need to the non-vible index of the time
+                //to delete the correct one
+                println!("Im in here2");
                 todo_list.remove((pos.mod_row - 2) as usize);
                 pos.mod_row = -1;
                 pos.modifier = Modification::Default;
@@ -347,6 +352,7 @@ fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&str>) {
         }
         _ => (),
     }
+    todo_list
 }
 
 //fn modification<'a>(pos: &mut Pos, todo_list: &'a mut Vec<&'a str>) -> Vec<&'a str> {
