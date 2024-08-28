@@ -182,10 +182,8 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         // let string_file: String = String::new();
 
         let mut x_visible = 0;
-        let mut x_all = 0;
 
-        for line in &todo_list {
-            x_all += 1;
+        for (i, line) in todo_list.iter().enumerate() {
             if let Some((status, task)) = line.split_once('\t') {
                 let matches_status = (pos.status == Status::Open && status == "[ ]")
                     || (pos.status == Status::Done && status == "[X]");
@@ -201,6 +199,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                             .expect("error while trying to get cursor position")
                             .1
                     {
+                        pos.mod_row = i as i8;
                         style(&task_to_print).attribute(Attribute::Bold)
                     } else {
                         style(&task_to_print).attribute(Attribute::Dim)
@@ -268,7 +267,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     //Status::Open
                     //HACK: maybe we need to go the first line when switching due to it being more
                     //easy
-                    pos.switch_status((x_all - x_visible + 1) as u16);
+                    pos.switch_status((todo_list.len() - x_visible + 1) as u16);
                     ()
                 }
                 event::KeyCode::Char('r') => {
@@ -280,7 +279,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 }
                 event::KeyCode::Char('d') => {
                     //TODO: should move currently highlighted todo to other side
-                    pos.mod_row = pos.row as i8;
+                    println!("{}", pos.mod_row);
                     pos.modifier = Modification::Delete;
                     todo_list = modification(&mut pos, todo_list.clone());
                     ()
@@ -295,13 +294,13 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 event::KeyCode::Char('h') => {
                     //TODO: call function that does the navigation to the left -> pos.status =
                     //Status::Done
-                    pos.switch_status((x_all - x_visible + 1) as u16);
+                    pos.switch_status((todo_list.len() - x_visible + 1) as u16);
                     ()
                 }
                 event::KeyCode::Char('l') => {
                     //TODO: call function that does the navigation to the left -> pos.status =
                     //Status::Done
-                    pos.switch_status((x_all - x_visible + 1) as u16);
+                    pos.switch_status((todo_list.len() - x_visible + 1) as u16);
                     ()
                 }
                 event::KeyCode::Char('a') => {
@@ -338,6 +337,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
 }
 
 fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&'a str>) -> Vec<&'a str> {
+    //FIX: only delete if enough in vec
     match pos.modifier {
         Modification::Delete => {
             if pos.status == Status::Done && pos.mod_row != -1 as i8 {
