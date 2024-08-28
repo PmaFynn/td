@@ -129,7 +129,12 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     //returns the amount of bytes appended to contents string <- useless
     // contents is the important thing
     let _ = file.read_to_string(&mut contents);
-    let mut todo_list: Vec<&str> = contents.lines().collect();
+
+    //let mut todo_list: Vec<&str> = contents.lines().collect();
+    let tmp: Vec<&str> = contents.lines().split_once('\t').collect();
+    let todo_list: Vec<(&str, &str)> = Vec::new();
+    for line in tmp {}
+    //let mut todo_list: Vec<(&str, &str)> = &tmp.iter().split_once('\t').collect();
 
     let mut pos = Pos {
         row: 2,
@@ -354,6 +359,8 @@ fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&'a str>) -> Vec<&'a str> 
                     "[X]" => status = "[ ]",
                     _ => (),
                 }
+                //FIX: use a vec of tuples -> (&str, &str) -> the vec is build by splitting and
+                //filling the vec and the todos are displayed by just format!({x.1}\t{x.2})
                 let new_todo = format!("{status}\t{task}");
                 todo_list.push(&new_todo);
             }
