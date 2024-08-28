@@ -279,7 +279,6 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 }
                 event::KeyCode::Char('d') => {
                     //TODO: should move currently highlighted todo to other side
-                    println!("{}", pos.mod_row);
                     pos.modifier = Modification::Delete;
                     todo_list = modification(&mut pos, todo_list.clone());
                     ()
@@ -312,14 +311,12 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
             _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
         }
 
-        println!("{:?}", todo_list);
-
         stdout
             .queue(cursor::MoveToRow(pos.row))
             .expect("error moving to new line after navigation");
 
         // Add a small delay to reduce CPU usage and prevent flickering
-        sleep(Duration::from_millis(150));
+        sleep(Duration::from_millis(50));
     }
 
     //clean up stuff
@@ -344,7 +341,7 @@ fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&'a str>) -> Vec<&'a str> 
                 //FIX: as of yet this deletes the element of vec at index x but this index x refers
                 //to the index of the visible element. We need to the non-vible index of the time
                 //to delete the correct one
-                todo_list.remove((pos.mod_row - 2) as usize);
+                todo_list.remove((pos.mod_row) as usize);
                 pos.mod_row = -1;
                 pos.modifier = Modification::Default;
             }
