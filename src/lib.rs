@@ -1,18 +1,15 @@
 use crossterm::{
-    cursor::{self, SavePosition},
+    cursor::{self},
     event,
-    style::{self, style, Attribute, Color, Print, PrintStyledContent, Stylize},
-    terminal::{self, disable_raw_mode, enable_raw_mode, size, window_size, WindowSize},
-    ExecutableCommand, QueueableCommand,
+    style::{style, Attribute, Color, Print, PrintStyledContent, Stylize},
+    terminal::{self, disable_raw_mode, enable_raw_mode},
+    QueueableCommand,
 };
-use std::{env, io::Read, os::linux::raw::stat};
-use std::{error::Error, io::stdout};
-use std::{
-    fmt::format,
-    io::{self, Write},
-};
-use std::{fs, os::unix::process};
-use std::{io::Stdout, time::Duration};
+use std::error::Error;
+use std::fs;
+use std::io::{self, Write};
+use std::time::Duration;
+use std::{env, io::Read};
 use std::{path::PathBuf, u16};
 use std::{thread::sleep, usize};
 
@@ -35,11 +32,9 @@ impl Task {
 
         if args.len() == 1 {
             let _ = main_tui(path);
-            //let _ = prints_todo(path).unwrap_or_else(|_| {
-            //    println!("No todo file found. \nConsider: td init");
-            //});
             Ok(())
         } else {
+            //TODO: if first arg == "help" -> print out guide or something
             let todo_instance = Task {
                 task: args[1].clone(),
                 status: Status::Open,
@@ -93,6 +88,8 @@ impl Pos {
     //pos.status = !pos.status;
     //FIX: does not yet work as intended as it sometimes jumps to the first line even though it
     //could stay at the line -> has to do with the row being two bigger than the length i think
+
+    //FIX: acutally sometimes when swapping it is not highlighted at all
     fn switch_status(&mut self, len: u16) -> &mut Self {
         match self.status {
             Status::Done => {
@@ -212,29 +209,25 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
             event::Event::Key(event) => match event.code {
                 event::KeyCode::Char('q') => exit = false,
                 event::KeyCode::Char('j') => {
-                    //TODO: call function that does the navigation
                     pos.one_down((x_visible + 1) as u16);
                 }
                 event::KeyCode::Char('k') => {
-                    //TODO: call function that does the navigation
                     pos.one_up();
                 }
                 event::KeyCode::Tab => {
-                    //TODO: call function that does the navigation to the right -> pos.status =
-                    //Status::Open
                     //HACK: maybe we need to go the first line when switching due to it being more
                     //easy
                     pos.switch_status((todo_list.len() - x_visible + 1) as u16);
                     ()
                 }
                 event::KeyCode::Char('r') => {
-                    //TODO: should move currently highlighted todo to other side
+                    //TODO: rename todo -> should actually be rather similar to swapping status as
+                    //we are just chaning the task instead of the status
                     pos.modifier = Modification::Rename;
                     todo_list = modification(&mut pos, todo_list.clone());
                     ()
                 }
                 event::KeyCode::Char('d') => {
-                    //TODO: should move currently highlighted todo to other side
                     pos.modifier = Modification::Delete;
                     todo_list = modification(&mut pos, todo_list.clone());
                     pos.mod_row = -1;
@@ -242,7 +235,6 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     ()
                 }
                 event::KeyCode::Enter => {
-                    //TODO: should move currently highlighted todo to other side
                     pos.modifier = Modification::SwitchStatus;
                     todo_list = modification(&mut pos, todo_list.clone());
                     pos.mod_row = -1;
@@ -250,19 +242,16 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     ()
                 }
                 event::KeyCode::Char('h') => {
-                    //TODO: call function that does the navigation to the left -> pos.status =
-                    //Status::Done
                     pos.switch_status((todo_list.len() - x_visible + 1) as u16);
                     ()
                 }
                 event::KeyCode::Char('l') => {
-                    //TODO: call function that does the navigation to the left -> pos.status =
-                    //Status::Done
                     pos.switch_status((todo_list.len() - x_visible + 1) as u16);
                     ()
                 }
                 event::KeyCode::Char('a') => {
-                    //TODO: call function that lets one insert new todo at current position
+                    //TODO: call function that lets one insert new todo (at current position or
+                    //just append for simplicity)
                     ()
                 }
                 _ => {}
@@ -310,6 +299,7 @@ fn modification<'a>(
     if pos.mod_row < 0 || pos.mod_row as usize >= todo_list.len() {
         return todo_list;
     }
+    //TODO: rename (and new todo)
     match pos.modifier {
         Modification::Delete => {
             if pos.status == Status::Done {
@@ -330,37 +320,12 @@ fn modification<'a>(
     todo_list
 }
 
-//fn modification<'a>(pos: &mut Pos, todo_list: &'a mut Vec<&'a str>) -> Vec<&'a str> {
-//    match pos.modifier {
-//        Modification::Delete => {
-//            //TODO: perhaps only let one remove a todo if it is status == done?
-//            //FIX: doesnt work as intended
-//            //might actually be harder than i thought. The problem is that we get different rows
-//            //for done and open
-//            //-> perhaps use differnt files for open and done
-//            if pos.status == Status::Done && pos.mod_row != -1 as i8 {
-//                todo_list.remove((pos.mod_row - 2) as usize);
-//                pos.mod_row = -1;
-//                pos.modifier = Modification::Default;
-//            }
-//        }
-//        //TODO: write other modifications
-//        _ => (),
-//    }
-//    //creates new vec to return
-//    todo_list.to_vec()
-//}
-
 /// appends new todo to the end of todo file
 pub fn write_todo(path: PathBuf, todo: Task) {
-    //TODO: use write(true) instead of append(true) and rewrite the entire file similar to the
-    //run() function. Further, print the line number at the uttermost left which we might be able
-    //to use to delete or set todos as done
-    let file = fs::OpenOptions::new()
-        .append(true)
-        .read(true)
-        .create(true)
-        .open(path);
+    //TODO: maybe just concat all all args if its more than 1 so I dont have to put "" -> like
+    //cargo run [executable] this is a new todo
+    //this would becomes "[ ]   this is a new todo" in the file
+    let file = fs::OpenOptions::new().append(true).create(true).open(path);
 
     match file {
         Ok(mut file) => {
