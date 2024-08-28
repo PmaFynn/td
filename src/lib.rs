@@ -346,6 +346,18 @@ fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&'a str>) -> Vec<&'a str> 
                 pos.modifier = Modification::Default;
             }
         }
+        Modification::SwitchStatus => {
+            let tmp: &str = todo_list[pos.mod_row as usize];
+            if let Some((mut status, task)) = tmp.split_once('\t') {
+                match status {
+                    "[ ]" => status = "[X]",
+                    "[X]" => status = "[ ]",
+                    _ => (),
+                }
+                let new_todo = format!("{status}\t{task}");
+                todo_list.push(&new_todo);
+            }
+        }
         _ => (),
     }
     todo_list
