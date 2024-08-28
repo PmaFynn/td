@@ -237,12 +237,16 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                     //TODO: should move currently highlighted todo to other side
                     pos.modifier = Modification::Delete;
                     todo_list = modification(&mut pos, todo_list.clone());
+                    pos.mod_row = -1;
+                    pos.modifier = Modification::Default;
                     ()
                 }
                 event::KeyCode::Enter => {
                     //TODO: should move currently highlighted todo to other side
                     pos.modifier = Modification::SwitchStatus;
                     todo_list = modification(&mut pos, todo_list.clone());
+                    pos.mod_row = -1;
+                    pos.modifier = Modification::Default;
                     ()
                 }
                 event::KeyCode::Char('h') => {
@@ -284,6 +288,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     {
         let mut file = fs::OpenOptions::new()
             .write(true)
+            .truncate(true)
             .open(path)
             .expect("error while trying to set options for opening file or opening file itself");
         for todo in todo_list {
@@ -301,29 +306,17 @@ fn modification<'a>(
     pos: &mut Pos,
     mut todo_list: Vec<(&'a str, &'a str)>,
 ) -> Vec<(&'a str, &'a str)> {
+    //defense first
+    if pos.mod_row < 0 || pos.mod_row as usize >= todo_list.len() {
+        return todo_list;
+    }
     match pos.modifier {
         Modification::Delete => {
-            if pos.mod_row >= 0
-                && (pos.mod_row as usize) < todo_list.len()
-                && pos.status == Status::Done
-            {
+            if pos.status == Status::Done {
                 todo_list.remove(pos.mod_row as usize);
-                pos.mod_row = -1;
-                pos.modifier = Modification::Default;
             }
         }
         Modification::SwitchStatus => {
-            //if let Some(todo) = todo_list.get_mut(pos.mod_row as usize) {
-            //    let (status, task) = *todo;
-            //    let new_status = match status {
-            //        "[ ]" => "[X]",
-            //        "[X]" => "[ ]",
-            //        _ => status,
-            //    };
-            //    //*todo = (new_status, task);
-            //    todo_list.push((new_status, task));
-            //}
-
             let new_status = match todo_list[pos.mod_row as usize].0 {
                 "[ ]" => "[X]",
                 "[X]" => "[ ]",
@@ -331,8 +324,6 @@ fn modification<'a>(
             };
             todo_list.push((new_status, todo_list[pos.mod_row as usize].1));
             todo_list.remove(pos.mod_row as usize);
-            pos.mod_row = -1;
-            pos.modifier = Modification::Default;
         }
         _ => {}
     }
