@@ -120,7 +120,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         .write(true)
         .read(true)
         .create(true)
-        .open(path)
+        .open(&path)
         .expect("error while trying to set options for opening file or opening file itself");
 
     let mut exit = true;
@@ -229,7 +229,6 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 }
                 event::KeyCode::Char('r') => {
                     //TODO: should move currently highlighted todo to other side
-                    pos.mod_row = pos.row as i8;
                     pos.modifier = Modification::Rename;
                     todo_list = modification(&mut pos, todo_list.clone());
                     ()
@@ -242,7 +241,6 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 }
                 event::KeyCode::Enter => {
                     //TODO: should move currently highlighted todo to other side
-                    // pos.mod_row = pos.row as i8;
                     pos.modifier = Modification::SwitchStatus;
                     todo_list = modification(&mut pos, todo_list.clone());
                     ()
@@ -281,6 +279,19 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         stdout.flush()?;
         stdout.queue(cursor::Show)?;
         let _ = disable_raw_mode();
+    }
+    //writing to file
+    {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .expect("error while trying to set options for opening file or opening file itself");
+        for todo in todo_list {
+            let status = todo.0;
+            let task = todo.1;
+            let line_to_write = format!("{status}\t{task}");
+            writeln!(file, "{}", line_to_write).expect("idk");
+        }
     }
 
     Ok(())
