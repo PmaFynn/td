@@ -109,10 +109,10 @@ impl Pos {
 }
 
 fn main_tui(path: PathBuf) -> io::Result<()> {
-    //TODO: perhaps use alternate screen
+    // TODO: perhaps use alternate screen
     let mut stdout = io::stdout();
 
-    // I dont think I need this
+    // I don't think I need this
     let _ = enable_raw_mode();
     stdout.queue(cursor::Hide)?;
 
@@ -126,15 +126,13 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     let mut exit = true;
 
     let mut contents: String = String::new();
-    //returns the amount of bytes appended to contents string <- useless
-    // contents is the important thing
     let _ = file.read_to_string(&mut contents);
 
-    //let mut todo_list: Vec<&str> = contents.lines().collect();
-    let tmp: Vec<&str> = contents.lines().split_once('\t').collect();
-    let todo_list: Vec<(&str, &str)> = Vec::new();
-    for line in tmp {}
-    //let mut todo_list: Vec<(&str, &str)> = &tmp.iter().split_once('\t').collect();
+    // Split the content by lines and create a new vector to store the tuples
+    let mut todo_list: Vec<(&str, &str)> = contents
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .collect();
 
     let mut pos = Pos {
         row: 2,
@@ -144,20 +142,13 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         modifier: Modification::Default,
     };
 
-    //let mut x_todo = contents.lines().count();
     let base_open_style = "Open".with(Color::White);
     let base_done_style = "Done".with(Color::White);
 
     while exit {
-        // let mut todo_list: Vec<&str> = contents.lines().collect();
-
         stdout.queue(terminal::Clear(terminal::ClearType::All))?;
 
-        //TODO: current_window.cols -> each col is a character so str.len() of 5 is 5 cols -> fix
-        //it
         stdout.queue(cursor::MoveTo(0, 0)).unwrap();
-        //done_styled = done_styled.attribute(Attribute::Reset);
-        //open_styled = open_styled.attribute(Attribute::Reset);
 
         // Re-initialize the styles to their base state at the start of each iteration
         let mut done_styled = base_done_style;
@@ -179,76 +170,37 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         stdout.queue(Print("\t")).unwrap();
         stdout.queue(PrintStyledContent(done_styled)).unwrap();
 
-        //TODO: height should not be 0 here but at least the height of the first line
         stdout.queue(cursor::MoveTo(1, 1)).unwrap();
         stdout.queue(cursor::MoveToNextLine(1)).unwrap();
 
-        // TODO: Think i can remove that, cant i?
-        // let string_file: String = String::new();
-
         let mut x_visible = 0;
 
-        for (i, line) in todo_list.iter().enumerate() {
-            if let Some((status, task)) = line.split_once('\t') {
-                let matches_status = (pos.status == Status::Open && status == "[ ]")
-                    || (pos.status == Status::Done && status == "[X]");
+        for (i, &(status, task)) in todo_list.iter().enumerate() {
+            let matches_status = (pos.status == Status::Open && status == "[ ]")
+                || (pos.status == Status::Done && status == "[X]");
 
-                if matches_status {
-                    x_visible += 1;
-                    let task_to_print = format!("{}\t{}", status, task);
+            if matches_status {
+                x_visible += 1;
+                let task_to_print = format!("{}\t{}", status, task);
 
-                    //PERF: geistesblitz in letzter sekunde -> try to somehow incoroporate the same
-                    //logic for delete,rename etc
-                    let style_task = if pos.row
-                        == cursor::position()
-                            .expect("error while trying to get cursor position")
-                            .1
-                    {
-                        pos.mod_row = i as i8;
-                        style(&task_to_print).attribute(Attribute::Bold)
-                    } else {
-                        style(&task_to_print).attribute(Attribute::Dim)
-                    };
+                let style_task = if pos.row
+                    == cursor::position()
+                        .expect("error while trying to get cursor position")
+                        .1
+                {
+                    pos.mod_row = i as i8;
+                    style(&task_to_print).attribute(Attribute::Bold)
+                } else {
+                    style(&task_to_print).attribute(Attribute::Dim)
+                };
 
-                    stdout
-                        .queue(PrintStyledContent(style_task))
-                        .expect("failed to print styled line");
-                    stdout.queue(cursor::MoveToNextLine(1)).unwrap();
-                }
+                stdout
+                    .queue(PrintStyledContent(style_task))
+                    .expect("failed to print styled line");
+                stdout.queue(cursor::MoveToNextLine(1)).unwrap();
             }
         }
 
-        //for line in contents.lines() {
-        //    //let split_lines: Vec<&str> = line.split('\t').collect();
-        //    if let Some((status, task)) = line.split_once('\t') {
-        //        let matches_status = (pos.status == Status::Open && status == "[ ]")
-        //            || (pos.status == Status::Done && status == "[X]");
-        //
-        //        if matches_status {
-        //            x_visible += 1;
-        //            let task_to_print = format!("{}\t{}", status, task);
-        //
-        //            //PERF: geistesblitz in letzter sekunde -> try to somehow incoroporate the same
-        //            //logic for delete,rename etc
-        //            let style_task = if pos.row
-        //                == cursor::position()
-        //                    .expect("error while trying to get cursor position")
-        //                    .1
-        //            {
-        //                style(&task_to_print).attribute(Attribute::Bold)
-        //            } else {
-        //                style(&task_to_print).attribute(Attribute::Dim)
-        //            };
-        //
-        //            stdout
-        //                .queue(PrintStyledContent(style_task))
-        //                .expect("failed to print styled line");
-        //            stdout.queue(cursor::MoveToNextLine(1)).unwrap();
-        //        }
-        //    }
-        //}
-
-        //move back to real position
         stdout
             .queue(cursor::MoveTo(pos.row, pos.col))
             .expect("error while moving cursor back to current position");
@@ -290,7 +242,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 }
                 event::KeyCode::Enter => {
                     //TODO: should move currently highlighted todo to other side
-                    pos.mod_row = pos.row as i8;
+                    // pos.mod_row = pos.row as i8;
                     pos.modifier = Modification::SwitchStatus;
                     todo_list = modification(&mut pos, todo_list.clone());
                     ()
@@ -314,17 +266,15 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 _ => {}
             },
             _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
-        }
-
+        };
         stdout
             .queue(cursor::MoveToRow(pos.row))
             .expect("error moving to new line after navigation");
 
-        // Add a small delay to reduce CPU usage and prevent flickering
         sleep(Duration::from_millis(50));
     }
 
-    //clean up stuff
+    // Clean up stuff
     {
         stdout.queue(terminal::Clear(terminal::ClearType::All))?;
         stdout.queue(cursor::MoveTo(0, 0))?;
@@ -333,39 +283,47 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         let _ = disable_raw_mode();
     }
 
-    //TODO: overwrite todo file with new content
-
     Ok(())
 }
 
-fn modification<'a>(pos: &mut Pos, mut todo_list: Vec<&'a str>) -> Vec<&'a str> {
-    //FIX: only delete if enough in vec
+fn modification<'a>(
+    pos: &mut Pos,
+    mut todo_list: Vec<(&'a str, &'a str)>,
+) -> Vec<(&'a str, &'a str)> {
     match pos.modifier {
         Modification::Delete => {
-            if pos.status == Status::Done && pos.mod_row != -1 as i8 {
-                //FIX: as of yet this deletes the element of vec at index x but this index x refers
-                //to the index of the visible element. We need to the non-vible index of the time
-                //to delete the correct one
-                todo_list.remove((pos.mod_row) as usize);
+            if pos.mod_row >= 0
+                && (pos.mod_row as usize) < todo_list.len()
+                && pos.status == Status::Done
+            {
+                todo_list.remove(pos.mod_row as usize);
                 pos.mod_row = -1;
                 pos.modifier = Modification::Default;
             }
         }
         Modification::SwitchStatus => {
-            let tmp: &str = todo_list[pos.mod_row as usize];
-            if let Some((mut status, task)) = tmp.split_once('\t') {
-                match status {
-                    "[ ]" => status = "[X]",
-                    "[X]" => status = "[ ]",
-                    _ => (),
-                }
-                //FIX: use a vec of tuples -> (&str, &str) -> the vec is build by splitting and
-                //filling the vec and the todos are displayed by just format!({x.1}\t{x.2})
-                let new_todo = format!("{status}\t{task}");
-                todo_list.push(&new_todo);
-            }
+            //if let Some(todo) = todo_list.get_mut(pos.mod_row as usize) {
+            //    let (status, task) = *todo;
+            //    let new_status = match status {
+            //        "[ ]" => "[X]",
+            //        "[X]" => "[ ]",
+            //        _ => status,
+            //    };
+            //    //*todo = (new_status, task);
+            //    todo_list.push((new_status, task));
+            //}
+
+            let new_status = match todo_list[pos.mod_row as usize].0 {
+                "[ ]" => "[X]",
+                "[X]" => "[ ]",
+                _ => "[ ]",
+            };
+            todo_list.push((new_status, todo_list[pos.mod_row as usize].1));
+            todo_list.remove(pos.mod_row as usize);
+            pos.mod_row = -1;
+            pos.modifier = Modification::Default;
         }
-        _ => (),
+        _ => {}
     }
     todo_list
 }
