@@ -149,6 +149,8 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     let base_open_style = "Open".with(Color::White);
     let base_done_style = "Done".with(Color::White);
 
+    stdout.queue(terminal::Clear(terminal::ClearType::All))?;
+
     while exit {
         //stdout.queue(terminal::Clear(terminal::ClearType::All))?;
 
