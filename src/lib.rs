@@ -315,6 +315,13 @@ fn modification<'a>(
             todo_list.push((new_status, todo_list[pos.mod_row as usize].1));
             todo_list.remove(pos.mod_row as usize);
         }
+        Modification::Rename => {
+            let new_task = match todo_list[pos.mod_row as usize].1 {
+                _ => "this works",
+            };
+            todo_list.push((todo_list[pos.mod_row as usize].0, new_task));
+            todo_list.remove(pos.mod_row as usize);
+        }
         _ => {}
     }
     todo_list
