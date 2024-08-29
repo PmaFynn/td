@@ -282,7 +282,8 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
             .queue(cursor::MoveToRow(pos.row))
             .expect("error moving to new line after navigation");
 
-        sleep(Duration::from_millis(50));
+        //30 fps
+        sleep(Duration::from_millis(33));
     }
 
     // Clean up stuff
