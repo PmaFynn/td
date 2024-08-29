@@ -2,7 +2,9 @@ use crossterm::{
     cursor::{self},
     event,
     style::{style, Attribute, Color, Print, PrintStyledContent, Stylize},
-    terminal::{self, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    },
     QueueableCommand,
 };
 use std::error::Error;
@@ -112,6 +114,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
 
     // I don't think I need this
     let _ = enable_raw_mode();
+    let _ = EnterAlternateScreen;
     stdout.queue(cursor::Hide)?;
 
     let mut file = fs::OpenOptions::new()
@@ -280,6 +283,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
         stdout.flush()?;
         stdout.queue(cursor::Show)?;
         let _ = disable_raw_mode();
+        let _ = LeaveAlternateScreen;
     }
     //writing to file
     {
