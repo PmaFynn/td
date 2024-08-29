@@ -150,7 +150,16 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     let base_done_style = "Done".with(Color::White);
 
     while exit {
-        stdout.queue(terminal::Clear(terminal::ClearType::All))?;
+        //stdout.queue(terminal::Clear(terminal::ClearType::All))?;
+
+        //HACK: keep an eye on the following -> idk
+
+        // Clear the specific lines that will be updated
+        let screen_height = todo_list.len() + 1; // Adjust based on your content height
+        for i in 0..screen_height {
+            stdout.queue(cursor::MoveTo(0, i as u16))?;
+            stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine))?;
+        }
 
         stdout.queue(cursor::MoveTo(0, 0)).unwrap();
 
