@@ -56,6 +56,7 @@ enum Modification {
     Delete,
     Rename,
     SwitchStatus,
+    New,
 }
 
 struct Pos {
@@ -126,9 +127,12 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
     let _ = file.read_to_string(&mut contents);
 
     // Split the content by lines and create a new vector to store the tuples
-    let mut todo_list: Vec<(&str, &str)> = contents
+    let mut todo_list: Vec<(&str, String)> = contents
         .lines()
-        .filter_map(|line| line.split_once('\t'))
+        .filter_map(|line| {
+            line.split_once('\t')
+                .map(|(key, value)| (key, value.to_string())) // Convert the second part to String
+        })
         .collect();
 
     let mut pos = Pos {
@@ -172,7 +176,7 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
 
         let mut x_visible = 0;
 
-        for (i, &(status, task)) in todo_list.iter().enumerate() {
+        for (i, &(status, ref task)) in todo_list.iter().enumerate() {
             let matches_status = (pos.status == Status::Open && status == "[ ]")
                 || (pos.status == Status::Done && status == "[X]");
 
@@ -252,6 +256,10 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
                 event::KeyCode::Char('a') => {
                     //TODO: call function that lets one insert new todo (at current position or
                     //just append for simplicity)
+                    pos.modifier = Modification::New;
+                    todo_list = modification(&mut pos, todo_list.clone());
+                    pos.mod_row = -1;
+                    pos.modifier = Modification::Default;
                     ()
                 }
                 _ => {}
@@ -293,13 +301,12 @@ fn main_tui(path: PathBuf) -> io::Result<()> {
 
 fn modification<'a>(
     pos: &mut Pos,
-    mut todo_list: Vec<(&'a str, &'a str)>,
-) -> Vec<(&'a str, &'a str)> {
-    //defense first
+    mut todo_list: Vec<(&'a str, String)>,
+) -> Vec<(&'a str, String)> {
     if pos.mod_row < 0 || pos.mod_row as usize >= todo_list.len() {
         return todo_list;
     }
-    //TODO: rename (and new todo)
+
     match pos.modifier {
         Modification::Delete => {
             if pos.status == Status::Done {
@@ -312,19 +319,27 @@ fn modification<'a>(
                 "[X]" => "[ ]",
                 _ => "[ ]",
             };
-            todo_list.push((new_status, todo_list[pos.mod_row as usize].1));
-            todo_list.remove(pos.mod_row as usize);
+            let task = todo_list[pos.mod_row as usize].1.clone();
+            todo_list[pos.mod_row as usize] = (new_status, task);
         }
         Modification::Rename => {
-            let new_task = match todo_list[pos.mod_row as usize].1 {
-                _ => "this works",
-            };
-            todo_list.push((todo_list[pos.mod_row as usize].0, new_task));
-            todo_list.remove(pos.mod_row as usize);
+            //TODO: Implement a function to get a new task name, for now, it's unchanged
+            let new_task = new_task();
+            todo_list[pos.mod_row as usize].1 = new_task;
+        }
+        Modification::New => {
+            //TODO: Implement a function to get a new task name, for now, it's unchanged
+            let new_task = new_task();
+            todo_list.push(("[ ]", new_task));
         }
         _ => {}
     }
     todo_list
+}
+
+fn new_task() -> String {
+    //TODO: Implement that user input is returned -> first really minimal then better looking
+    String::from("test2")
 }
 
 /// appends new todo to the end of todo file
