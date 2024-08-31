@@ -30,20 +30,21 @@ pub struct Task {
 impl Task {
     /// Builds todo struct
     pub fn build(args: &[String], path: PathBuf) -> Result<(), Box<dyn Error>> {
-        assert!(args.len() < 3);
-
-        if args.len() == 1 {
-            let _ = main_tui(path);
-            Ok(())
-        } else {
-            //TODO: if first arg == "help" -> print out guide or something
-            let todo_instance = Task {
-                task: args[1].clone(),
-                status: Status::Open,
-            };
-            write_todo(path, todo_instance);
-            return Ok(());
+        //this should skip the first entry of args which is always some random value
+        let mut concated_task = String::new();
+        for (i, arg) in args.into_iter().enumerate().skip(1) {
+            concated_task.push_str(arg);
+            if i != args.len() {
+                concated_task.push(' ')
+            }
         }
+        //TODO: if first arg == "help" -> print out guide or something
+        let todo_instance = Task {
+            task: concated_task,
+            status: Status::Open,
+        };
+        write_todo(path, todo_instance);
+        return Ok(());
     }
 }
 
@@ -108,7 +109,7 @@ impl Pos {
     }
 }
 
-fn main_tui(path: PathBuf) -> io::Result<()> {
+pub fn main_tui(path: PathBuf) -> io::Result<()> {
     // TODO: perhaps use alternate screen
     let mut stdout = io::stdout();
 

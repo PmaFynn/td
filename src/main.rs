@@ -8,7 +8,11 @@ fn main() {
     //TODO: make that dynamic instead of hardcoded for me
     let todo_path = td::get_todo_file_path();
     //man page ordered on wish
-    if args.len() > 2 {
+    if args.len() == 1 {
+        // opens up tui
+        let _ = td::main_tui(todo_path);
+    } else if args.len() == 2 && (args[1] == "help" || args[1] == "h") {
+        // prints usage
         println!("{}", HELP);
     } else {
         let _ = td::Task::build(&args, todo_path).unwrap_or_else(|err| {
