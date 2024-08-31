@@ -11,7 +11,9 @@ fn main() {
     if args.len() == 1 {
         // opens up tui
         let _ = td::main_tui(todo_path);
-    } else if args.len() == 2 && (args[1] == "help" || args[1] == "h") {
+    } else if args.len() == 2
+        && (args[1] == "help" || args[1] == "h" || args[1] == "-help" || args[1] == "-h")
+    {
         // prints usage
         println!("{}", HELP);
     } else {
