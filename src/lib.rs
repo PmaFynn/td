@@ -233,12 +233,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 event::KeyCode::Char('k') => {
                     pos.one_up();
                 }
-                event::KeyCode::Tab => {
-                    //HACK: maybe we need to go the first line when switching due to it being more
-                    //easy
-                    pos.switch_status((todo_list.len() - x_visible + 1) as u16);
-                    ()
-                }
                 event::KeyCode::Char('r') => {
                     //TODO: rename todo -> should actually be rather similar to swapping status as
                     //we are just chaning the task instead of the status
@@ -260,12 +254,18 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     pos.modifier = Modification::Default;
                     ()
                 }
+                event::KeyCode::Tab => {
+                    //HACK: maybe we need to go the first line when switching due to it being more
+                    //easy
+                    pos.switch_status((todo_list.len() - x_visible - 2) as u16);
+                    ()
+                }
                 event::KeyCode::Char('h') => {
-                    pos.switch_status((todo_list.len() - x_visible + 1) as u16);
+                    pos.switch_status((todo_list.len() - x_visible - 2) as u16);
                     ()
                 }
                 event::KeyCode::Char('l') => {
-                    pos.switch_status((todo_list.len() - x_visible + 1) as u16);
+                    pos.switch_status((todo_list.len() - x_visible - 2) as u16);
                     ()
                 }
                 event::KeyCode::Char('a') => {
