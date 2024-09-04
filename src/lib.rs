@@ -1,17 +1,12 @@
 use crossterm::event::{Event, KeyCode};
 use crossterm::{
-    cursor::{self},
     event, execute,
-    style::{style, Attribute, Color, Print, PrintStyledContent, Stylize},
-    terminal::{
-        self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-    },
-    ExecutableCommand, QueueableCommand,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color as ratatuiColor, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Terminal,
@@ -21,9 +16,9 @@ use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
 use std::time::Duration;
+use std::usize;
 use std::{env, io::Read};
 use std::{path::PathBuf, u16};
-use std::{thread::sleep, usize};
 
 #[derive(Debug, PartialEq)]
 pub enum Status {
@@ -74,7 +69,6 @@ enum Modification {
 
 struct Pos {
     cur_item: u16,
-    col: u16,
     status: Status,
     mod_item: i8,
     modifier: Modification,
@@ -150,7 +144,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
     let mut pos = Pos {
         cur_item: 0,
-        col: 1,
         status: Status::Open,
         mod_item: 0,
         modifier: Modification::Default,
