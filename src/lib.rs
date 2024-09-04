@@ -1,12 +1,22 @@
+use crossterm::event::{Event, KeyCode};
 use crossterm::{
     cursor::{self},
-    event,
+    event, execute,
     style::{style, Attribute, Color, Print, PrintStyledContent, Stylize},
     terminal::{
         self, disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     },
-    QueueableCommand,
+    ExecutableCommand, QueueableCommand,
 };
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction, Layout},
+    style::{Color as ratatuiColor, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
+    Terminal,
+};
+
 use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
@@ -63,31 +73,31 @@ enum Modification {
 }
 
 struct Pos {
-    row: u16,
+    cur_item: u16,
     col: u16,
     status: Status,
-    mod_row: i8,
+    mod_item: i8,
     modifier: Modification,
 }
 
 impl Pos {
     fn go_bottom(&mut self, bottom: u16) -> &mut Self {
-        self.row = bottom + 1;
+        self.cur_item = bottom;
         self
     }
     fn go_top(&mut self) -> &mut Self {
-        self.row = 2;
+        self.cur_item = 0;
         self
     }
     fn one_down(&mut self, max_row: u16) -> &mut Self {
-        if self.row < max_row {
-            self.row += 1;
+        if self.cur_item < max_row - 1 {
+            self.cur_item += 1;
         }
         self
     }
     fn one_up(&mut self) -> &mut Self {
-        if self.row > 2 {
-            self.row -= 1;
+        if self.cur_item > 0 {
+            self.cur_item -= 1;
         }
         self
     }
@@ -101,11 +111,11 @@ impl Pos {
         match self.status {
             Status::Done => {
                 self.status = Status::Open;
-                self.row = std::cmp::min(len, self.row);
+                self.cur_item = std::cmp::min(len, self.cur_item);
             }
             Status::Open => {
                 self.status = Status::Done;
-                self.row = std::cmp::min(len, self.row);
+                self.cur_item = std::cmp::min(len, self.cur_item);
             }
         }
         self
@@ -113,13 +123,12 @@ impl Pos {
 }
 
 pub fn main_tui(path: PathBuf) -> io::Result<()> {
-    // TODO: perhaps use alternate screen
+    // Setup terminal
+    enable_raw_mode()?;
     let mut stdout = io::stdout();
-
-    // I don't think I need this
-    let _ = enable_raw_mode();
-    let _ = EnterAlternateScreen;
-    stdout.queue(cursor::Hide)?;
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
 
     let mut file = fs::OpenOptions::new()
         .write(true)
@@ -128,201 +137,189 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         .open(&path)
         .expect("error while trying to set options for opening file or opening file itself");
 
-    let mut exit = true;
-
     let mut contents: String = String::new();
     let _ = file.read_to_string(&mut contents);
 
-    // Split the content by lines and create a new vector to store the tuples
     let mut todo_list: Vec<(&str, String)> = contents
         .lines()
         .filter_map(|line| {
             line.split_once('\t')
-                .map(|(key, value)| (key, value.to_string())) // Convert the second part to String
+                .map(|(key, value)| (key, value.to_string()))
         })
         .collect();
 
     let mut pos = Pos {
-        row: 2,
+        cur_item: 0,
         col: 1,
         status: Status::Open,
-        mod_row: -1,
+        mod_item: -1,
         modifier: Modification::Default,
     };
 
-    let base_open_style = "Open".with(Color::White);
-    let base_done_style = "Done".with(Color::White);
+    let mut x_visible = 0;
 
-    stdout.queue(terminal::Clear(terminal::ClearType::All))?;
+    loop {
+        terminal.draw(|f| {
+            let size = f.area();
 
-    while exit {
-        //stdout.queue(terminal::Clear(terminal::ClearType::All))?;
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(90), Constraint::Percentage(10)].as_ref())
+                .split(size);
 
-        //HACK: keep an eye on the following -> idk
+            let status_style = Style::default().fg(ratatui::prelude::Color::White);
+            let status = Line::from(vec![
+                Span::styled(
+                    "Open".to_string(),
+                    if pos.status == Status::Open {
+                        Style::default().add_modifier(Modifier::BOLD)
+                    } else {
+                        status_style
+                    },
+                ),
+                Span::raw("    ".to_string()),
+                Span::styled(
+                    "Done".to_string(),
+                    if pos.status == Status::Done {
+                        Style::default().add_modifier(Modifier::BOLD)
+                    } else {
+                        status_style
+                    },
+                ),
+            ]);
+            let status_paragraph =
+                Paragraph::new(status).block(Block::default().borders(Borders::ALL));
+            f.render_widget(status_paragraph, chunks[1]);
 
-        // Clear the specific lines that will be updated
-        let screen_height = todo_list.len() + 1; // Adjust based on your content height
-        for i in 0..screen_height {
-            stdout.queue(cursor::MoveTo(0, i as u16))?;
-            stdout.queue(terminal::Clear(terminal::ClearType::CurrentLine))?;
-        }
+            x_visible = 0;
+            let items: Vec<ListItem> = todo_list
+                .iter()
+                .enumerate()
+                .filter_map(|(i, (status, task))| {
+                    // Determine if the current item is included based on its status
+                    let included = match pos.status {
+                        Status::Open => *status == "[ ]", // Only include items with status "[ ]" when Open
+                        Status::Done => *status == "[X]", // Only include items with status "[X]" when Done
+                    };
 
-        stdout.queue(cursor::MoveTo(0, 0)).unwrap();
+                    if included {
+                        // Only create the list item if the current item is included
+                        let task_style = if x_visible == pos.cur_item as usize {
+                            Style::default().add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default()
+                        };
 
-        // Re-initialize the styles to their base state at the start of each iteration
-        let mut done_styled = base_done_style;
-        let mut open_styled = base_open_style;
+                        let task_spans = Line::from(vec![
+                            Span::styled(
+                                status.to_string(),
+                                Style::default().fg(ratatui::prelude::Color::Yellow),
+                            ),
+                            Span::raw("    ".to_string()),
+                            Span::styled(task, task_style),
+                        ]);
+                        // Increment x_visible for items being filtered out
+                        x_visible += 1;
 
-        // Apply status-specific styles
-        match pos.status {
-            Status::Done => {
-                done_styled = done_styled.attribute(Attribute::Bold);
-                open_styled = open_styled.attribute(Attribute::Dim);
-            }
-            Status::Open => {
-                done_styled = done_styled.attribute(Attribute::Dim);
-                open_styled = open_styled.attribute(Attribute::Bold);
-            }
-        }
+                        // Return the new ListItem
+                        Some(ListItem::new(task_spans))
+                    } else {
+                        None // Exclude this item from the final list
+                    }
+                })
+                .collect();
+            let todos = List::new(items)
+                .block(Block::default().borders(Borders::ALL).title("TODOs"))
+                .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
-        stdout.queue(PrintStyledContent(open_styled)).unwrap();
-        stdout.queue(Print("\t")).unwrap();
-        stdout.queue(PrintStyledContent(done_styled)).unwrap();
+            f.render_stateful_widget(
+                todos,
+                chunks[0],
+                &mut ratatui::widgets::ListState::default(),
+            );
+        })?;
 
-        stdout.queue(cursor::MoveTo(1, 1)).unwrap();
-        stdout.queue(cursor::MoveToNextLine(1)).unwrap();
+        if let Event::Key(key) = event::read()? {
+            match key.code {
+                KeyCode::Char('q') => break,
 
-        let mut x_visible = 0;
-
-        for (i, &(status, ref task)) in todo_list.iter().enumerate() {
-            let matches_status = (pos.status == Status::Open && status == "[ ]")
-                || (pos.status == Status::Done && status == "[X]");
-
-            if matches_status {
-                x_visible += 1;
-                let task_to_print = format!("{}\t{}", status, task);
-
-                let style_task = if pos.row
-                    == cursor::position()
-                        .expect("error while trying to get cursor position")
-                        .1
-                {
-                    pos.mod_row = i as i8;
-                    style(&task_to_print).attribute(Attribute::Bold)
-                } else {
-                    style(&task_to_print).attribute(Attribute::Dim)
-                };
-
-                stdout
-                    .queue(PrintStyledContent(style_task))
-                    .expect("failed to print styled line");
-                stdout.queue(cursor::MoveToNextLine(1)).unwrap();
-            }
-        }
-
-        stdout
-            .queue(cursor::MoveTo(pos.row, pos.col))
-            .expect("error while moving cursor back to current position");
-
-        stdout.flush()?;
-
-        //this waits until event happes
-        match event::read()? {
-            event::Event::Key(event) => match event.code {
-                event::KeyCode::Char('q') => exit = false,
-                event::KeyCode::Char('j') => {
-                    pos.one_down((x_visible + 1) as u16);
+                // Navigation
+                KeyCode::Char('j') => {
+                    pos.one_down(x_visible as u16);
                 }
-                event::KeyCode::Char('k') => {
+                KeyCode::Char('k') => {
                     pos.one_up();
                 }
-                event::KeyCode::Char('r') => {
-                    //TODO: rename todo -> should actually be rather similar to swapping status as
-                    //we are just chaning the task instead of the status
-                    pos.modifier = Modification::Rename;
-                    todo_list = modification(&mut pos, todo_list.clone());
-                    ()
-                }
-                event::KeyCode::Char('d') => {
-                    pos.modifier = Modification::Delete;
-                    todo_list = modification(&mut pos, todo_list.clone());
-                    pos.mod_row = -1;
-                    pos.modifier = Modification::Default;
-                    ()
-                }
-                event::KeyCode::Char('g') => {
+                KeyCode::Char('g') => {
                     pos.go_top();
-                    ()
                 }
-                event::KeyCode::Char('G') => {
-                    pos.go_bottom(x_visible);
-                    ()
+                KeyCode::Char('G') => {
+                    pos.go_bottom(x_visible as u16);
                 }
-                event::KeyCode::Enter => {
-                    pos.modifier = Modification::SwitchStatus;
-                    todo_list = modification(&mut pos, todo_list.clone());
-                    pos.mod_row = -1;
-                    pos.modifier = Modification::Default;
-                    ()
+
+                //FIX: for some reason this does not work for enter
+                KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
+                    pos.switch_status(todo_list.len() as u16 - x_visible as u16 - 1);
+                    // pos.switch_status(todo_list.len() as u16 - x_visible as u16);
                 }
-                event::KeyCode::Tab => {
-                    //HACK: maybe we need to go the first line when switching due to it being more
-                    //easy
-                    pos.switch_status((todo_list.len() - (x_visible - 2) as usize) as u16);
-                    ()
-                }
-                event::KeyCode::Char('h') => {
-                    pos.switch_status((todo_list.len() - (x_visible - 2) as usize) as u16);
-                    ()
-                }
-                event::KeyCode::Char('l') => {
-                    pos.switch_status((todo_list.len() - (x_visible - 2) as usize) as u16);
-                    ()
-                }
-                event::KeyCode::Char('a') => {
-                    //TODO: call function that lets one insert new todo (at current position or
-                    //just append for simplicity)
+
+                // Switch task status (Open/Done)
+                //KeyCode::Enter => {
+                //    pos.modifier = Modification::SwitchStatus;
+                //    todo_list = modification(&mut pos, todo_list.clone());
+                //    pos.mod_item = -1;
+                //    pos.modifier = Modification::Default;
+                //}
+
+                // Adding a new task
+                KeyCode::Char('a') => {
                     pos.modifier = Modification::New;
                     todo_list = modification(&mut pos, todo_list.clone());
-                    pos.mod_row = -1;
+                    pos.mod_item = -1;
                     pos.modifier = Modification::Default;
-                    ()
                 }
+
+                // Renaming a task
+                KeyCode::Char('r') => {
+                    pos.modifier = Modification::Rename;
+                    todo_list = modification(&mut pos, todo_list.clone());
+                }
+
+                // Deleting a task
+                KeyCode::Char('d') => {
+                    pos.modifier = Modification::Delete;
+                    todo_list = modification(&mut pos, todo_list.clone());
+                    pos.mod_item = -1;
+                    pos.modifier = Modification::Default;
+                }
+
                 _ => {}
-            },
-            _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
-        };
-
-        stdout
-            .queue(cursor::MoveToRow(pos.row))
-            .expect("error moving to new line after navigation");
-
-        //30 fps
-        sleep(Duration::from_millis(33));
-    }
-
-    // Clean up stuff
-    {
-        stdout.queue(terminal::Clear(terminal::ClearType::All))?;
-        stdout.queue(cursor::MoveTo(0, 0))?;
-        stdout.flush()?;
-        stdout.queue(cursor::Show)?;
-        let _ = disable_raw_mode();
-        let _ = LeaveAlternateScreen;
-    }
-    //writing to file
-    {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(path)
-            .expect("error while trying to set options for opening file or opening file itself");
-        for todo in todo_list {
-            let status = todo.0;
-            let task = todo.1;
-            let line_to_write = format!("{status}\t{task}");
-            writeln!(file, "{}", line_to_write).expect("idk");
+            }
         }
+
+        std::thread::sleep(Duration::from_millis(33));
+    }
+
+    // Clean up terminal
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        crossterm::event::DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
+
+    // Writing changes back to file
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .expect("error while trying to set options for opening file or opening file itself");
+    for todo in todo_list {
+        let status = todo.0;
+        let task = todo.1;
+        let line_to_write = format!("{status}\t{task}");
+        writeln!(file, "{}", line_to_write).expect("error writing to file");
     }
 
     Ok(())
@@ -332,29 +329,29 @@ fn modification<'a>(
     pos: &mut Pos,
     mut todo_list: Vec<(&'a str, String)>,
 ) -> Vec<(&'a str, String)> {
-    if pos.mod_row < 0 || pos.mod_row as usize >= todo_list.len() {
+    if pos.mod_item < 0 || pos.mod_item as usize >= todo_list.len() {
         return todo_list;
     }
 
     match pos.modifier {
         Modification::Delete => {
             if pos.status == Status::Done {
-                todo_list.remove(pos.mod_row as usize);
+                todo_list.remove(pos.mod_item as usize);
             }
         }
         Modification::SwitchStatus => {
-            let new_status = match todo_list[pos.mod_row as usize].0 {
+            let new_status = match todo_list[pos.mod_item as usize].0 {
                 "[ ]" => "[X]",
                 "[X]" => "[ ]",
                 _ => "[ ]",
             };
-            let task = todo_list[pos.mod_row as usize].1.clone();
-            todo_list[pos.mod_row as usize] = (new_status, task);
+            let task = todo_list[pos.mod_item as usize].1.clone();
+            todo_list[pos.mod_item as usize] = (new_status, task);
         }
         Modification::Rename => {
             //TODO: Implement a function to get a new task name, for now, it's unchanged
             let new_task = new_task();
-            todo_list[pos.mod_row as usize].1 = new_task;
+            todo_list[pos.mod_item as usize].1 = new_task;
         }
         Modification::New => {
             //TODO: Implement a function to get a new task name, for now, it's unchanged
