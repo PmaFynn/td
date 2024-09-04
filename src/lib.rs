@@ -71,11 +71,14 @@ struct Pos {
 }
 
 impl Pos {
-    //fn set_pos(&mut self, col: u16, row: u16) -> &mut Self {
-    //    self.col = col;
-    //    self.row = row;
-    //    self
-    //}
+    fn go_bottom(&mut self, bottom: u16) -> &mut Self {
+        self.row = bottom + 1;
+        self
+    }
+    fn go_top(&mut self) -> &mut Self {
+        self.row = 2;
+        self
+    }
     fn one_down(&mut self, max_row: u16) -> &mut Self {
         if self.row < max_row {
             self.row += 1;
@@ -247,6 +250,14 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     pos.modifier = Modification::Default;
                     ()
                 }
+                event::KeyCode::Char('g') => {
+                    pos.go_top();
+                    ()
+                }
+                event::KeyCode::Char('G') => {
+                    pos.go_bottom(x_visible);
+                    ()
+                }
                 event::KeyCode::Enter => {
                     pos.modifier = Modification::SwitchStatus;
                     todo_list = modification(&mut pos, todo_list.clone());
@@ -257,15 +268,15 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 event::KeyCode::Tab => {
                     //HACK: maybe we need to go the first line when switching due to it being more
                     //easy
-                    pos.switch_status((todo_list.len() - x_visible - 2) as u16);
+                    pos.switch_status((todo_list.len() - (x_visible - 2) as usize) as u16);
                     ()
                 }
                 event::KeyCode::Char('h') => {
-                    pos.switch_status((todo_list.len() - x_visible - 2) as u16);
+                    pos.switch_status((todo_list.len() - (x_visible - 2) as usize) as u16);
                     ()
                 }
                 event::KeyCode::Char('l') => {
-                    pos.switch_status((todo_list.len() - x_visible - 2) as u16);
+                    pos.switch_status((todo_list.len() - (x_visible - 2) as usize) as u16);
                     ()
                 }
                 event::KeyCode::Char('a') => {
@@ -281,6 +292,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             },
             _ => {} // Event::Resize(width, height) => println!("New size {}x{}", width, height),
         };
+
         stdout
             .queue(cursor::MoveToRow(pos.row))
             .expect("error moving to new line after navigation");
