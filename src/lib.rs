@@ -152,7 +152,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         cur_item: 0,
         col: 1,
         status: Status::Open,
-        mod_item: -1,
+        mod_item: 0,
         modifier: Modification::Default,
     };
 
@@ -205,6 +205,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     if included {
                         // Only create the list item if the current item is included
                         let task_style = if x_visible == pos.cur_item as usize {
+                            pos.mod_item = i as i8;
                             Style::default().add_modifier(Modifier::BOLD)
                         } else {
                             Style::default()
@@ -254,7 +255,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     pos.go_top();
                 }
                 KeyCode::Char('G') => {
-                    pos.go_bottom(x_visible as u16);
+                    pos.go_bottom(x_visible as u16 - 1);
                 }
 
                 //FIX: for some reason this does not work for enter
@@ -264,18 +265,16 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 }
 
                 // Switch task status (Open/Done)
-                //KeyCode::Enter => {
-                //    pos.modifier = Modification::SwitchStatus;
-                //    todo_list = modification(&mut pos, todo_list.clone());
-                //    pos.mod_item = -1;
-                //    pos.modifier = Modification::Default;
-                //}
+                KeyCode::Enter => {
+                    pos.modifier = Modification::SwitchStatus;
+                    todo_list = modification(&mut pos, todo_list.clone());
+                    pos.modifier = Modification::Default;
+                }
 
                 // Adding a new task
                 KeyCode::Char('a') => {
                     pos.modifier = Modification::New;
                     todo_list = modification(&mut pos, todo_list.clone());
-                    pos.mod_item = -1;
                     pos.modifier = Modification::Default;
                 }
 
@@ -289,7 +288,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 KeyCode::Char('d') => {
                     pos.modifier = Modification::Delete;
                     todo_list = modification(&mut pos, todo_list.clone());
-                    pos.mod_item = -1;
                     pos.modifier = Modification::Default;
                 }
 
@@ -329,7 +327,7 @@ fn modification<'a>(
     pos: &mut Pos,
     mut todo_list: Vec<(&'a str, String)>,
 ) -> Vec<(&'a str, String)> {
-    if pos.mod_item < 0 || pos.mod_item as usize >= todo_list.len() {
+    if pos.mod_item as usize >= todo_list.len() {
         return todo_list;
     }
 
