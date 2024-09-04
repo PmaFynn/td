@@ -325,6 +325,7 @@ fn modification<'a>(
     }
 
     match pos.modifier {
+        //TODO: if the item is the last item it pos.item should go one up
         Modification::Delete => {
             if pos.status == Status::Done {
                 todo_list.remove(pos.mod_item as usize);
