@@ -1,3 +1,5 @@
+- add todo creation feature in tui
+- add modification feature in tui
 - when switching or deleting the last item the highlighted line is below the visible
 - allow setting up of more td files (e.g. work dir) -> td -work and td is the default
 - allow for searching with (/)
