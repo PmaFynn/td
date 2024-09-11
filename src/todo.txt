@@ -6,3 +6,4 @@
 - allow for searching with (/)
 - all not used keys bring up the help menu (<- menu has to implemented as well)
 - FIX: overflow when swapping to done while there is no done todo item
+- FIX: more overflows 
