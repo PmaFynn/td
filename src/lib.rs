@@ -150,8 +150,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         modifier: Modification::Default,
     };
 
-let mut last_event_time = Instant::now();
-let debounce_duration = Duration::from_millis(150); // Adjust the debounce duration to suit your need
+    let mut last_event_time = Instant::now();
+    let debounce_duration = Duration::from_millis(70); // Adjust the debounce duration to suit your need
 
     let mut x_visible = 0;
 
@@ -237,98 +237,102 @@ let debounce_duration = Duration::from_millis(150); // Adjust the debounce durat
             );
         })?;
 
-            // Poll for an event with a timeout to avoid blocking
-    if event::poll(Duration::from_millis(100))? {
-        if let Event::Key(key) = event::read()? {
-            // Check if enough time has passed to handle the next event
-            if last_event_time.elapsed() >= debounce_duration {
-                last_event_time = Instant::now();  // Reset event timer
+        // Poll for an event with a timeout to avoid blocking
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                // Check if enough time has passed to handle the next event
+                if last_event_time.elapsed() >= debounce_duration {
+                    last_event_time = Instant::now(); // Reset event timer
 
-                match key.code {
-                    KeyCode::Char('q') => break,
+                    match key.code {
+                        KeyCode::Char('q') => break,
 
-                    // Navigation
-                    KeyCode::Char('j') => {
-                        pos.one_down(x_visible as u16);
-                    }
-                    KeyCode::Char('k') => {
-                        pos.one_up();
-                    }
-                    KeyCode::Char('g') => {
-                        pos.go_top();
-                    }
-                    KeyCode::Char('G') => {
-                        pos.go_bottom(x_visible as u16 - 1);
-                    }
+                        // Navigation
+                        KeyCode::Char('j') => {
+                            pos.one_down(x_visible as u16);
+                        }
+                        KeyCode::Char('k') => {
+                            pos.one_up();
+                        }
+                        KeyCode::Char('g') => {
+                            pos.go_top();
+                        }
+                        KeyCode::Char('G') => {
+                            pos.go_bottom(x_visible as u16 - 1);
+                        }
 
-                    // Switch status (Open/Done)
-                    KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
-                        pos.switch_status(todo_list.len() as u16 - x_visible as u16 - 1);
-                    }
+                        // Switch status (Open/Done)
+                        KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
+                            pos.switch_status(todo_list.len() as u16 - x_visible as u16 - 1);
+                        }
 
-                    // Switch task status (Open/Done) when pressing Enter
-                    KeyCode::Enter => {
-                        pos.modifier = Modification::SwitchStatus;
-                        todo_list = modification(&mut pos, todo_list.clone());
-                        pos.modifier = Modification::Default;
-                    }
+                        // Switch task status (Open/Done) when pressing Enter
+                        KeyCode::Enter => {
+                            pos.modifier = Modification::SwitchStatus;
+                            todo_list = modification(&mut pos, todo_list.clone());
+                            pos.modifier = Modification::Default;
+                        }
 
-                    // Adding a new task
-                    KeyCode::Char('a') => {
-                        pos.modifier = Modification::New;
-                        todo_list = modification(&mut pos, todo_list.clone());
-                        pos.modifier = Modification::Default;
-                    }
+                        // Adding a new task
+                        KeyCode::Char('a') => {
+                            pos.modifier = Modification::New;
+                            todo_list = modification(&mut pos, todo_list.clone());
+                            pos.modifier = Modification::Default;
+                        }
 
-                    // Renaming a task
-                    KeyCode::Char('r') => {
-                        pos.modifier = Modification::Rename;
-                        todo_list = modification(&mut pos, todo_list.clone());
-                    }
+                        // Renaming a task
+                        KeyCode::Char('r') => {
+                            pos.modifier = Modification::Rename;
+                            todo_list = modification(&mut pos, todo_list.clone());
+                        }
 
-                    // Deleting a task
-                    KeyCode::Char('d') => {
-                        pos.modifier = Modification::Delete;
-                        todo_list = modification(&mut pos, todo_list.clone());
-                        pos.modifier = Modification::Default;
-                    }
+                        // Deleting a task
+                        KeyCode::Char('d') => {
+                            pos.modifier = Modification::Delete;
+                            todo_list = modification(&mut pos, todo_list.clone());
+                            pos.modifier = Modification::Default;
+                        }
 
-                    _ => {}
-                }}}}
+                        _ => {}
+                    }
+                }
+            }
+        }
 
         std::thread::sleep(Duration::from_millis(33));
     }
-// Writing changes back to file
+    // Writing changes back to file
     println!("{}", path.display());
-let mut file = match fs::OpenOptions::new()
-    .write(true)
-    .truncate(true)
-    .open(&path) {
-    Ok(file) => file,
-    Err(e) => {
-        eprintln!("Error opening file for writing: {}", e);
-        return Err(e); // Exit if there's an error opening the file
-    }
-};
+    let mut file = match fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&path)
+    {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Error opening file for writing: {}", e);
+            return Err(e); // Exit if there's an error opening the file
+        }
+    };
 
-// Write each todo back to the file
-for todo in &todo_list {
-    let status = todo.0;
-    let task = &todo.1;
-    let line_to_write = format!("{status}\t{task}");
-    
-    // Attempt to write the line, and handle any errors
-    if let Err(e) = writeln!(file, "{}", line_to_write) {
-        eprintln!("Error writing to file: {}", e);
-        return Err(e); // Exit if there's an error writing to the file
-    }
-}
+    // Write each todo back to the file
+    for todo in &todo_list {
+        let status = todo.0;
+        let task = &todo.1;
+        let line_to_write = format!("{status}\t{task}");
 
-// Flush the buffer to ensure all data is written to the file
-if let Err(e) = file.flush() {
-    eprintln!("Error flushing file: {}", e);
-    return Err(e); // Exit if there's an error flushing the file
-}
+        // Attempt to write the line, and handle any errors
+        if let Err(e) = writeln!(file, "{}", line_to_write) {
+            eprintln!("Error writing to file: {}", e);
+            return Err(e); // Exit if there's an error writing to the file
+        }
+    }
+
+    // Flush the buffer to ensure all data is written to the file
+    if let Err(e) = file.flush() {
+        eprintln!("Error flushing file: {}", e);
+        return Err(e); // Exit if there's an error flushing the file
+    }
 
     // Clean up terminal
     disable_raw_mode()?;
@@ -417,4 +421,3 @@ pub fn get_todo_file_path() -> PathBuf {
     path.push("todos.txt");
     path
 }
-
