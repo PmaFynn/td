@@ -151,7 +151,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
     };
 
     let mut last_event_time = Instant::now();
-    let debounce_duration = Duration::from_millis(70); // Adjust the debounce duration to suit your need
+    let debounce_duration = Duration::from_millis(1); // Adjust the debounce duration to suit your need
 
     let mut x_visible = 0;
 
