@@ -5,21 +5,23 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
+    prelude::Alignment,
+    prelude::Color,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table},
     Terminal,
 };
 
 use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 use std::usize;
 use std::{env, io::Read};
-use std::{path::PathBuf, u16};
 
 #[derive(Debug, PartialEq)]
 pub enum Status {
@@ -44,7 +46,6 @@ impl Task {
                 concated_task.push(' ')
             }
         }
-        //TODO: if first arg == "help" -> print out guide or something
         let todo_instance = Task {
             task: concated_task,
             status: Status::Open,
@@ -53,11 +54,6 @@ impl Task {
         return Ok(());
     }
 }
-
-//struct Win {
-//    cols: u16,
-//    rows: u16,
-//}
 
 #[derive(PartialEq)]
 enum Modification {
@@ -69,48 +65,25 @@ enum Modification {
 }
 
 struct Pos {
-    cur_item: u16,
     status: Status,
     mod_item: i8,
     modifier: Modification,
 }
 
 impl Pos {
-    fn go_bottom(&mut self, bottom: u16) -> &mut Self {
-        self.cur_item = bottom;
-        self
-    }
-    fn go_top(&mut self) -> &mut Self {
-        self.cur_item = 0;
-        self
-    }
-    fn one_down(&mut self, max_row: u16) -> &mut Self {
-        if self.cur_item < max_row - 1 {
-            self.cur_item += 1;
-        }
-        self
-    }
-    fn one_up(&mut self) -> &mut Self {
-        if self.cur_item > 0 {
-            self.cur_item -= 1;
-        }
-        self
-    }
     //TODO: switch this function for a trait implementation of Not for Status and then just to
     //pos.status = !pos.status;
     //FIX: does not yet work as intended as it sometimes jumps to the first line even though it
     //could stay at the line -> has to do with the row being two bigger than the length i think
 
     //FIX: acutally sometimes when swapping it is not highlighted at all
-    fn switch_status(&mut self, len: u16) -> &mut Self {
+    fn switch_status(&mut self) -> &mut Self {
         match self.status {
             Status::Done => {
                 self.status = Status::Open;
-                self.cur_item = std::cmp::min(len, self.cur_item);
             }
             Status::Open => {
                 self.status = Status::Done;
-                self.cur_item = std::cmp::min(len, self.cur_item);
             }
         }
         self
@@ -144,7 +117,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         .collect();
 
     let mut pos = Pos {
-        cur_item: 0,
         status: Status::Open,
         mod_item: 0,
         modifier: Modification::Default,
@@ -153,11 +125,14 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
     let mut last_event_time = Instant::now();
     let debounce_duration = Duration::from_millis(1); // Adjust the debounce duration to suit your need
 
-    let mut x_visible = 0;
+    let mut visible_list_length = 0;
 
     // Add list state for managing scrolling
     let mut list_state = ratatui::widgets::ListState::default();
     list_state.select(Some(0)); // Start at the top of the list
+                                //
+                                // Application state
+    let mut show_modal = false;
 
     loop {
         terminal.draw(|f| {
@@ -192,7 +167,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 Paragraph::new(status).block(Block::default().borders(Borders::ALL));
             f.render_widget(status_paragraph, chunks[1]);
 
-            x_visible = 0;
+            visible_list_length = 0;
             let items: Vec<ListItem> = todo_list
                 .iter()
                 .enumerate()
@@ -205,12 +180,11 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
                     if included {
                         // Only create the list item if the current item is included
-                        let task_style = if x_visible == pos.cur_item as usize {
-                            pos.mod_item = i as i8;
-                            Style::default().add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default()
-                        };
+                        if let Some(selected) = list_state.selected() {
+                            if visible_list_length == selected {
+                                pos.mod_item = i as i8;
+                            };
+                        }
 
                         let task_spans = Line::from(vec![
                             Span::styled(
@@ -218,10 +192,10 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                                 Style::default().fg(ratatui::prelude::Color::Yellow),
                             ),
                             Span::raw("    ".to_string()),
-                            Span::styled(task, task_style),
+                            Span::raw(task),
                         ]);
                         // Increment x_visible for items being filtered out
-                        x_visible += 1;
+                        visible_list_length += 1;
 
                         // Return the new ListItem
                         Some(ListItem::new(task_spans))
@@ -235,7 +209,13 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 .block(Block::default().borders(Borders::ALL).title("TODOs"))
                 .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
+            visible_list_length = todos.len();
+
             f.render_stateful_widget(todos, chunks[0], &mut list_state);
+
+            if show_modal {
+                render_modal(f);
+            }
         })?;
 
         // Poll for an event with a timeout to avoid blocking
@@ -250,31 +230,28 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
                         // Navigation
                         KeyCode::Char('j') => {
-                            pos.one_down(x_visible as u16);
                             if let Some(selected) = list_state.selected() {
                                 let new_index = (selected + 1).min(todo_list.len() - 1);
                                 list_state.select(Some(new_index));
                             }
                         }
                         KeyCode::Char('k') => {
-                            pos.one_up();
                             if let Some(selected) = list_state.selected() {
                                 let new_index = selected.saturating_sub(1);
                                 list_state.select(Some(new_index));
                             }
                         }
                         KeyCode::Char('g') => {
-                            pos.go_top();
+                            //pos.go_top();
                             list_state.select(Some(0));
                         }
                         KeyCode::Char('G') => {
-                            pos.go_bottom(x_visible as u16 - 1);
                             list_state.select(Some(todo_list.len() - 1));
                         }
 
                         // Switch status (Open/Done)
                         KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
-                            pos.switch_status(todo_list.len() as u16 - x_visible as u16 - 1);
+                            pos.switch_status();
                         }
 
                         // Switch task status (Open/Done) when pressing Enter
@@ -304,15 +281,18 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                             pos.modifier = Modification::Default;
                         }
 
-                        _ => {}
+                        _ => {
+                            show_modal = !show_modal;
+                        }
                     }
                 }
             }
         }
 
         std::thread::sleep(Duration::from_millis(33));
-    } // Writing changes back to file
-    println!("{}", path.display());
+    }
+
+    // Writing changes back to file
     let mut file = match fs::OpenOptions::new()
         .write(true)
         .truncate(true)
@@ -393,6 +373,51 @@ fn modification<'a>(
         _ => {}
     }
     todo_list
+}
+
+// Separate function to render the modal
+fn render_modal(f: &mut ratatui::Frame) {
+    // Create a centered Rect for the modal
+    let modal_width = (f.area().width * 60) / 100; // 60% of the terminal width
+    let modal_height = (f.area().height * 20) / 100; // 20% of the terminal height
+    let modal_layout = Rect {
+        x: (f.area().width - modal_width) / 2,
+        y: (f.area().height - modal_height) / 2,
+        width: modal_width,
+        height: modal_height,
+    };
+    // Clear the area where the modal will be rendered
+    f.render_widget(Clear, modal_layout);
+
+    // Create a paragraph with static text for the modal
+    let modal_block = Block::default()
+        .title("Keybinds")
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::White));
+
+    // Define the rows and columns for the table
+    let rows = vec![
+        Row::new(vec![Cell::from("down"), Cell::from("j")]),
+        Row::new(vec![Cell::from("up"), Cell::from("k")]),
+        Row::new(vec![Cell::from("switch status"), Cell::from("h, l, tab")]),
+        Row::new(vec![Cell::from("goTop"), Cell::from("g")]),
+        Row::new(vec![Cell::from("delete done todo"), Cell::from("d")]),
+        Row::new(vec![Cell::from("goBottom"), Cell::from("G")]),
+        Row::new(vec![
+            Cell::from("switch status of selected todo"),
+            Cell::from("enter"),
+        ]),
+    ];
+    // Create the table with width constraints
+    let table = Table::new(
+        rows,
+        [Constraint::Percentage(90), Constraint::Percentage(10)],
+    )
+    .block(modal_block)
+    .column_spacing(2) // Add space between columns
+    .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+
+    f.render_widget(table, modal_layout);
 }
 
 fn new_task() -> String {

@@ -1,8 +1,8 @@
 - add todo creation feature in tui
 - add modification feature in tui
-- when switching or deleting the last item the highlighted line is below the visible
 - allow setting up of more td files (e.g. work dir) -> td -work and td is the default
 - allow for searching with (/)
 - all not used keys bring up the help menu (<- menu has to implemented as well)
+	- also perhaps bring it up when pressing d in the wrong menu
 - FIX: overflow when swapping to done while there is no done todo item
 - FIX: more overflows 
