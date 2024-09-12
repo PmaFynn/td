@@ -6,7 +6,6 @@ use crossterm::{
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    prelude::Alignment,
     prelude::Color,
     style::{Modifier, Style},
     text::{Line, Span},
