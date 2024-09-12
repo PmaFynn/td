@@ -155,6 +155,10 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
     let mut x_visible = 0;
 
+    // Add list state for managing scrolling
+    let mut list_state = ratatui::widgets::ListState::default();
+    list_state.select(Some(0)); // Start at the top of the list
+
     loop {
         terminal.draw(|f| {
             let size = f.area();
@@ -226,15 +230,12 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     }
                 })
                 .collect();
+
             let todos = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("TODOs"))
                 .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
-            f.render_stateful_widget(
-                todos,
-                chunks[0],
-                &mut ratatui::widgets::ListState::default(),
-            );
+            f.render_stateful_widget(todos, chunks[0], &mut list_state);
         })?;
 
         // Poll for an event with a timeout to avoid blocking
@@ -250,15 +251,25 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                         // Navigation
                         KeyCode::Char('j') => {
                             pos.one_down(x_visible as u16);
+                            if let Some(selected) = list_state.selected() {
+                                let new_index = (selected + 1).min(todo_list.len() - 1);
+                                list_state.select(Some(new_index));
+                            }
                         }
                         KeyCode::Char('k') => {
                             pos.one_up();
+                            if let Some(selected) = list_state.selected() {
+                                let new_index = selected.saturating_sub(1);
+                                list_state.select(Some(new_index));
+                            }
                         }
                         KeyCode::Char('g') => {
                             pos.go_top();
+                            list_state.select(Some(0));
                         }
                         KeyCode::Char('G') => {
                             pos.go_bottom(x_visible as u16 - 1);
+                            list_state.select(Some(todo_list.len() - 1));
                         }
 
                         // Switch status (Open/Done)
@@ -300,8 +311,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         }
 
         std::thread::sleep(Duration::from_millis(33));
-    }
-    // Writing changes back to file
+    } // Writing changes back to file
     println!("{}", path.display());
     let mut file = match fs::OpenOptions::new()
         .write(true)
