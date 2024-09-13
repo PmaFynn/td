@@ -133,6 +133,10 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                                 // Application state
     let mut show_modal = false;
 
+    let mut search_for: (String, i32) = (String::from(""), 0);
+
+    let mut last_relevant_key: char = '/';
+
     loop {
         terminal.draw(|f| {
             let size = f.area();
@@ -167,6 +171,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             f.render_widget(status_paragraph, chunks[1]);
 
             visible_list_length = 0;
+            let mut searched_n_item = 0;
             let items: Vec<ListItem> = todo_list
                 .iter()
                 .enumerate()
@@ -178,6 +183,20 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     };
 
                     if included {
+                        if search_for.0 != ""
+                            && task.contains(&search_for.0)
+                            && searched_n_item == search_for.1
+                        {
+                            list_state.select(Some(visible_list_length));
+                            searched_n_item += 1;
+                            //search_for = (String::from(""), search_for.1);
+                        } else if search_for.0 != ""
+                            && task.contains(&search_for.0)
+                            && searched_n_item < search_for.1
+                        {
+                            searched_n_item += 1;
+                        }
+
                         // Only create the list item if the current item is included
                         if let Some(selected) = list_state.selected() {
                             if visible_list_length == selected {
@@ -203,6 +222,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     }
                 })
                 .collect();
+
+            search_for.1 = 0;
 
             let todos = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("TODOs"))
@@ -244,8 +265,22 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                             //pos.go_top();
                             list_state.select(Some(0));
                         }
+
                         KeyCode::Char('G') => {
                             list_state.select(Some(todo_list.len() - 1));
+                        }
+
+                        KeyCode::Char('/') => {
+                            search_for = (String::from("test"), 0);
+                            last_relevant_key = '/';
+                            //TODO: Search
+                        }
+                        KeyCode::Char('n') => {
+                            if last_relevant_key == '/' || last_relevant_key == 'n' {
+                                search_for.1 += 1;
+                                println!("test");
+                            }
+                            last_relevant_key = 'n';
                         }
 
                         // Switch status (Open/Done)
