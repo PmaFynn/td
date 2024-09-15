@@ -306,7 +306,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
                     if !app_state.show_modal {
                         match key.code {
-                            KeyCode::Char('q') => break,
+                            KeyCode::Char('q') | KeyCode::Esc => break,
 
                             // Navigation
                             KeyCode::Char('j') => {
@@ -358,6 +358,13 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
                             // Adding a new task
                             KeyCode::Char('a') => {
+                                //HACK: idk -> maybe i want to be able input todos after reading a
+                                //done todo
+                                //
+                                //if app_state.status == Status::Open {
+                                //    app_state.modifier = Modification::New;
+                                //    app_state.show_modal = true;
+                                //}
                                 app_state.modifier = Modification::New;
                                 app_state.show_modal = true;
                                 //todo_list = modification(&mut app_state, todo_list.clone());
@@ -501,9 +508,30 @@ fn modification<'a>(
 
 // Separate function to render the modal
 fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
+    // Define the rows and columns for the table
+    let rows = vec![
+        Row::new(vec![Cell::from("quit application"), Cell::from("q")]),
+        Row::new(vec![Cell::from("exit out of modal"), Cell::from("Esc")]),
+        Row::new(vec![Cell::from("down"), Cell::from("j")]),
+        Row::new(vec![Cell::from("up"), Cell::from("k")]),
+        Row::new(vec![Cell::from("switch status"), Cell::from("h, l, tab")]),
+        Row::new(vec![Cell::from("goTop"), Cell::from("g")]),
+        Row::new(vec![Cell::from("delete done todo"), Cell::from("d")]),
+        Row::new(vec![Cell::from("add new todo"), Cell::from("a")]),
+        Row::new(vec![Cell::from("rename selected todo"), Cell::from("n")]),
+        Row::new(vec![Cell::from("goBottom"), Cell::from("G")]),
+        Row::new(vec![
+            Cell::from("switch status of selected todo"),
+            Cell::from("enter"),
+        ]),
+    ];
     // Create a centered Rect for the modal
     let modal_width = (f.area().width * 60) / 100; // 60% of the terminal width
-    let modal_height = (f.area().height * 20) / 100; // 20% of the terminal height
+    let modal_height = match app_state.modifier {
+        Modification::Rename | Modification::New => 3,
+        //_ => (f.area().height * 30) / 100,
+        _ => rows.len() as u16 + 2, //length of help_rows + 2 for border
+    };
     let modal_layout = Rect {
         x: (f.area().width - modal_width) / 2,
         y: (f.area().height - modal_height) / 2,
@@ -517,20 +545,22 @@ fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
     match app_state.modifier {
         Modification::Rename => {
             let input = Paragraph::new(app_state.input_state.input.as_str())
-                .style(Style::default().fg(Color::Yellow))
+                .style(Style::default().fg(Color::White))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Color::Blue)
                         .title("Rename selected todo"),
                 );
             f.render_widget(input, modal_layout);
         }
         Modification::New => {
             let input = Paragraph::new(app_state.input_state.input.as_str())
-                .style(Style::default().fg(Color::Yellow))
+                .style(Style::default().fg(Color::White))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
+                        .border_style(Color::Blue)
                         .title("Create new todo"),
                 );
             f.render_widget(input, modal_layout);
@@ -540,21 +570,9 @@ fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
             let modal_block = Block::default()
                 .title("Keybinds")
                 .borders(Borders::ALL)
+                .border_style(Color::Blue)
                 .style(Style::default().fg(Color::White));
 
-            // Define the rows and columns for the table
-            let rows = vec![
-                Row::new(vec![Cell::from("down"), Cell::from("j")]),
-                Row::new(vec![Cell::from("up"), Cell::from("k")]),
-                Row::new(vec![Cell::from("switch status"), Cell::from("h, l, tab")]),
-                Row::new(vec![Cell::from("goTop"), Cell::from("g")]),
-                Row::new(vec![Cell::from("delete done todo"), Cell::from("d")]),
-                Row::new(vec![Cell::from("goBottom"), Cell::from("G")]),
-                Row::new(vec![
-                    Cell::from("switch status of selected todo"),
-                    Cell::from("enter"),
-                ]),
-            ];
             // Create the table with width constraints
             let table = Table::new(
                 rows,
