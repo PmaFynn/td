@@ -62,18 +62,82 @@ enum Modification {
     SwitchStatus,
     New,
 }
+struct InputState {
+    input: String,
+    cursor_position: usize,
+    canceled: bool,
+    submitted: bool,
+}
 
-struct Pos {
+impl InputState {
+    pub fn new() -> Self {
+        Self {
+            input: String::new(),
+            cursor_position: 0,
+            canceled: false,
+            submitted: false,
+        }
+    }
+    pub fn reset() -> Self {
+        Self {
+            input: String::new(),
+            cursor_position: 0,
+            canceled: false,
+            submitted: false,
+        }
+    }
+    pub fn handle_input(&mut self, key: crossterm::event::KeyEvent) {
+        match key.code {
+            KeyCode::Char(c) => {
+                self.input.insert(self.cursor_position, c);
+                self.cursor_position += 1;
+            }
+            KeyCode::Backspace => {
+                if self.cursor_position > 0 {
+                    self.input.remove(self.cursor_position - 1);
+                    self.cursor_position -= 1;
+                }
+            }
+            KeyCode::Left => {
+                if self.cursor_position > 0 {
+                    self.cursor_position -= 1;
+                }
+            }
+            KeyCode::Right => {
+                if self.cursor_position < self.input.len() {
+                    self.cursor_position += 1;
+                }
+            }
+
+            KeyCode::Enter => self.submitted = true,
+            KeyCode::Esc => self.canceled = true,
+            _ => {}
+        }
+    }
+}
+
+struct App {
     status: Status,
     mod_item: i8,
     modifier: Modification,
+    input_state: InputState,
+    show_modal: bool,
 }
 
-impl Pos {
+impl App {
     //TODO: switch this function for a trait implementation of Not for Status and then just to
     //pos.status = !pos.status;
     //FIX: does not yet work as intended as it sometimes jumps to the first line even though it
     //could stay at the line -> has to do with the row being two bigger than the length i think
+    pub fn new() -> Self {
+        Self {
+            status: Status::Open,
+            mod_item: 0,
+            modifier: Modification::Default,
+            input_state: InputState::new(),
+            show_modal: false,
+        }
+    }
 
     //FIX: acutally sometimes when swapping it is not highlighted at all
     fn switch_status(&mut self) -> &mut Self {
@@ -115,11 +179,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         })
         .collect();
 
-    let mut pos = Pos {
-        status: Status::Open,
-        mod_item: 0,
-        modifier: Modification::Default,
-    };
+    let mut app_state = App::new();
 
     let mut last_event_time = Instant::now();
     let debounce_duration = Duration::from_millis(1); // Adjust the debounce duration to suit your need
@@ -131,8 +191,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
     list_state.select(Some(0)); // Start at the top of the list
                                 //
                                 // Application state
-    let mut show_modal = false;
-
     let mut search_for: (String, i32) = (String::from(""), 0);
 
     let mut last_relevant_key: char = '/';
@@ -150,7 +208,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             let status = Line::from(vec![
                 Span::styled(
                     "Open".to_string(),
-                    if pos.status == Status::Open {
+                    if app_state.status == Status::Open {
                         Style::default().add_modifier(Modifier::BOLD)
                     } else {
                         status_style
@@ -159,7 +217,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 Span::raw("    ".to_string()),
                 Span::styled(
                     "Done".to_string(),
-                    if pos.status == Status::Done {
+                    if app_state.status == Status::Done {
                         Style::default().add_modifier(Modifier::BOLD)
                     } else {
                         status_style
@@ -177,7 +235,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 .enumerate()
                 .filter_map(|(i, (status, task))| {
                     // Determine if the current item is included based on its status
-                    let included = match pos.status {
+                    let included = match app_state.status {
                         Status::Open => *status == "[ ]", // Only include items with status "[ ]" when Open
                         Status::Done => *status == "[X]", // Only include items with status "[X]" when Done
                     };
@@ -200,7 +258,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                         // Only create the list item if the current item is included
                         if let Some(selected) = list_state.selected() {
                             if visible_list_length == selected {
-                                pos.mod_item = i as i8;
+                                app_state.mod_item = i as i8;
                             };
                         }
 
@@ -233,8 +291,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
             f.render_stateful_widget(todos, chunks[0], &mut list_state);
 
-            if show_modal {
-                render_modal(f);
+            if app_state.show_modal {
+                render_modal(f, &app_state);
             }
         })?;
 
@@ -242,81 +300,114 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 // Check if enough time has passed to handle the next event
+                // also check if windows really needs this or just the polling
                 if last_event_time.elapsed() >= debounce_duration {
                     last_event_time = Instant::now(); // Reset event timer
 
-                    match key.code {
-                        KeyCode::Char('q') => break,
+                    if !app_state.show_modal {
+                        match key.code {
+                            KeyCode::Char('q') => break,
 
-                        // Navigation
-                        KeyCode::Char('j') => {
-                            if let Some(selected) = list_state.selected() {
-                                let new_index = (selected + 1).min(todo_list.len() - 1);
-                                list_state.select(Some(new_index));
+                            // Navigation
+                            KeyCode::Char('j') => {
+                                if let Some(selected) = list_state.selected() {
+                                    let new_index = (selected + 1).min(todo_list.len() - 1);
+                                    list_state.select(Some(new_index));
+                                }
+                            }
+                            KeyCode::Char('k') => {
+                                if let Some(selected) = list_state.selected() {
+                                    let new_index = selected.saturating_sub(1);
+                                    list_state.select(Some(new_index));
+                                }
+                            }
+                            KeyCode::Char('g') => {
+                                //pos.go_top();
+                                list_state.select(Some(0));
+                            }
+
+                            KeyCode::Char('G') => {
+                                list_state.select(Some(todo_list.len() - 1));
+                            }
+
+                            KeyCode::Char('/') => {
+                                search_for = (String::from("test"), 0);
+                                last_relevant_key = '/';
+                                //TODO: Search
+                            }
+                            KeyCode::Char('n') => {
+                                if last_relevant_key == '/' || last_relevant_key == 'n' {
+                                    search_for.1 += 1;
+                                    println!("test");
+                                }
+                                last_relevant_key = 'n';
+                            }
+
+                            // Switch status (Open/Done)
+                            KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
+                                app_state.switch_status();
+                            }
+
+                            // Switch task status (Open/Done) when pressing Enter
+                            KeyCode::Enter => {
+                                app_state.modifier = Modification::SwitchStatus;
+                                todo_list =
+                                    modification(&mut app_state, String::new(), todo_list.clone());
+                                app_state.modifier = Modification::Default;
+                            }
+
+                            // Adding a new task
+                            KeyCode::Char('a') => {
+                                app_state.modifier = Modification::New;
+                                app_state.show_modal = true;
+                                //todo_list = modification(&mut app_state, todo_list.clone());
+                                //app_state.modifier = Modification::Default;
+                            }
+
+                            // Renaming a task
+                            KeyCode::Char('r') => {
+                                app_state.modifier = Modification::Rename;
+                                app_state.show_modal = true;
+                            }
+
+                            // Deleting a task
+                            KeyCode::Char('d') => {
+                                app_state.modifier = Modification::Delete;
+                                todo_list =
+                                    modification(&mut app_state, String::new(), todo_list.clone());
+                                app_state.modifier = Modification::Default;
+                            }
+
+                            _ => {
+                                app_state.show_modal = !app_state.show_modal;
                             }
                         }
-                        KeyCode::Char('k') => {
-                            if let Some(selected) = list_state.selected() {
-                                let new_index = selected.saturating_sub(1);
-                                list_state.select(Some(new_index));
+                    } else {
+                        match key.code {
+                            _ => {
+                                app_state.input_state.handle_input(key);
+                                //match app_state.modifier {
+                                //    Modification::Rename => {}
+                                //    Modification::New => {}
+                                //    _ => {
+                                //        //TODO: display help here
+                                //    }
+                                //}
+                                if app_state.input_state.submitted {
+                                    // Save the input
+                                    let new_todo = app_state.input_state.input.clone();
+                                    todo_list = modification(&mut app_state, new_todo, todo_list);
+                                    //todo_list.push(("[ ]", new_todo)); // Assuming you have a Vec<String> for todos
+                                    app_state.show_modal = false;
+                                    app_state.input_state = InputState::new();
+                                    app_state.modifier = Modification::Default;
+                                } else if app_state.input_state.canceled {
+                                    // Cancel input
+                                    app_state.show_modal = false;
+                                    app_state.input_state = InputState::new();
+                                    app_state.modifier = Modification::Default;
+                                }
                             }
-                        }
-                        KeyCode::Char('g') => {
-                            //pos.go_top();
-                            list_state.select(Some(0));
-                        }
-
-                        KeyCode::Char('G') => {
-                            list_state.select(Some(todo_list.len() - 1));
-                        }
-
-                        KeyCode::Char('/') => {
-                            search_for = (String::from("test"), 0);
-                            last_relevant_key = '/';
-                            //TODO: Search
-                        }
-                        KeyCode::Char('n') => {
-                            if last_relevant_key == '/' || last_relevant_key == 'n' {
-                                search_for.1 += 1;
-                                println!("test");
-                            }
-                            last_relevant_key = 'n';
-                        }
-
-                        // Switch status (Open/Done)
-                        KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
-                            pos.switch_status();
-                        }
-
-                        // Switch task status (Open/Done) when pressing Enter
-                        KeyCode::Enter => {
-                            pos.modifier = Modification::SwitchStatus;
-                            todo_list = modification(&mut pos, todo_list.clone());
-                            pos.modifier = Modification::Default;
-                        }
-
-                        // Adding a new task
-                        KeyCode::Char('a') => {
-                            pos.modifier = Modification::New;
-                            todo_list = modification(&mut pos, todo_list.clone());
-                            pos.modifier = Modification::Default;
-                        }
-
-                        // Renaming a task
-                        KeyCode::Char('r') => {
-                            pos.modifier = Modification::Rename;
-                            todo_list = modification(&mut pos, todo_list.clone());
-                        }
-
-                        // Deleting a task
-                        KeyCode::Char('d') => {
-                            pos.modifier = Modification::Delete;
-                            todo_list = modification(&mut pos, todo_list.clone());
-                            pos.modifier = Modification::Default;
-                        }
-
-                        _ => {
-                            show_modal = !show_modal;
                         }
                     }
                 }
@@ -371,38 +462,37 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 }
 
 fn modification<'a>(
-    pos: &mut Pos,
+    app_state: &mut App,
+    todo_item_from_input: String,
     mut todo_list: Vec<(&'a str, String)>,
 ) -> Vec<(&'a str, String)> {
-    if pos.mod_item as usize >= todo_list.len() {
+    if app_state.mod_item as usize >= todo_list.len() {
         return todo_list;
     }
 
-    match pos.modifier {
+    match app_state.modifier {
         //TODO: if the item is the last item it pos.item should go one up
         Modification::Delete => {
-            if pos.status == Status::Done {
-                todo_list.remove(pos.mod_item as usize);
+            if app_state.status == Status::Done {
+                todo_list.remove(app_state.mod_item as usize);
             }
         }
         Modification::SwitchStatus => {
-            let new_status = match todo_list[pos.mod_item as usize].0 {
+            let new_status = match todo_list[app_state.mod_item as usize].0 {
                 "[ ]" => "[X]",
                 "[X]" => "[ ]",
                 _ => "[ ]",
             };
-            let task = todo_list[pos.mod_item as usize].1.clone();
-            todo_list[pos.mod_item as usize] = (new_status, task);
+            let task = todo_list[app_state.mod_item as usize].1.clone();
+            todo_list[app_state.mod_item as usize] = (new_status, task);
         }
         Modification::Rename => {
             //TODO: Implement a function to get a new task name, for now, it's unchanged
-            let new_task = new_task();
-            todo_list[pos.mod_item as usize].1 = new_task;
+            todo_list[app_state.mod_item as usize].1 = todo_item_from_input;
         }
         Modification::New => {
             //TODO: Implement a function to get a new task name, for now, it's unchanged
-            let new_task = new_task();
-            todo_list.push(("[ ]", new_task));
+            todo_list.push(("[ ]", todo_item_from_input));
         }
         _ => {}
     }
@@ -410,7 +500,7 @@ fn modification<'a>(
 }
 
 // Separate function to render the modal
-fn render_modal(f: &mut ratatui::Frame) {
+fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
     // Create a centered Rect for the modal
     let modal_width = (f.area().width * 60) / 100; // 60% of the terminal width
     let modal_height = (f.area().height * 20) / 100; // 20% of the terminal height
@@ -420,43 +510,62 @@ fn render_modal(f: &mut ratatui::Frame) {
         width: modal_width,
         height: modal_height,
     };
+
     // Clear the area where the modal will be rendered
     f.render_widget(Clear, modal_layout);
 
-    // Create a paragraph with static text for the modal
-    let modal_block = Block::default()
-        .title("Keybinds")
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White));
+    match app_state.modifier {
+        Modification::Rename => {
+            let input = Paragraph::new(app_state.input_state.input.as_str())
+                .style(Style::default().fg(Color::Yellow))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Rename selected todo"),
+                );
+            f.render_widget(input, modal_layout);
+        }
+        Modification::New => {
+            let input = Paragraph::new(app_state.input_state.input.as_str())
+                .style(Style::default().fg(Color::Yellow))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Create new todo"),
+                );
+            f.render_widget(input, modal_layout);
+        }
+        _ => {
+            // Create a paragraph with static text for the modal
+            let modal_block = Block::default()
+                .title("Keybinds")
+                .borders(Borders::ALL)
+                .style(Style::default().fg(Color::White));
 
-    // Define the rows and columns for the table
-    let rows = vec![
-        Row::new(vec![Cell::from("down"), Cell::from("j")]),
-        Row::new(vec![Cell::from("up"), Cell::from("k")]),
-        Row::new(vec![Cell::from("switch status"), Cell::from("h, l, tab")]),
-        Row::new(vec![Cell::from("goTop"), Cell::from("g")]),
-        Row::new(vec![Cell::from("delete done todo"), Cell::from("d")]),
-        Row::new(vec![Cell::from("goBottom"), Cell::from("G")]),
-        Row::new(vec![
-            Cell::from("switch status of selected todo"),
-            Cell::from("enter"),
-        ]),
-    ];
-    // Create the table with width constraints
-    let table = Table::new(
-        rows,
-        [Constraint::Percentage(90), Constraint::Percentage(10)],
-    )
-    .block(modal_block)
-    .column_spacing(2) // Add space between columns
-    .highlight_style(Style::default().add_modifier(Modifier::BOLD));
-
-    f.render_widget(table, modal_layout);
-}
-
-fn new_task() -> String {
-    //TODO: Implement that user input is returned -> first really minimal then better looking
-    String::from("test2")
+            // Define the rows and columns for the table
+            let rows = vec![
+                Row::new(vec![Cell::from("down"), Cell::from("j")]),
+                Row::new(vec![Cell::from("up"), Cell::from("k")]),
+                Row::new(vec![Cell::from("switch status"), Cell::from("h, l, tab")]),
+                Row::new(vec![Cell::from("goTop"), Cell::from("g")]),
+                Row::new(vec![Cell::from("delete done todo"), Cell::from("d")]),
+                Row::new(vec![Cell::from("goBottom"), Cell::from("G")]),
+                Row::new(vec![
+                    Cell::from("switch status of selected todo"),
+                    Cell::from("enter"),
+                ]),
+            ];
+            // Create the table with width constraints
+            let table = Table::new(
+                rows,
+                [Constraint::Percentage(90), Constraint::Percentage(10)],
+            )
+            .block(modal_block)
+            .column_spacing(2) // Add space between columns
+            .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+            f.render_widget(table, modal_layout);
+        }
+    }
 }
 
 /// appends new todo to the end of todo file
