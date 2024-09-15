@@ -59,6 +59,7 @@ enum Modification {
     Default,
     Delete,
     Rename,
+    Search,
     SwitchStatus,
     New,
 }
@@ -191,9 +192,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
     list_state.select(Some(0)); // Start at the top of the list
                                 //
                                 // Application state
-    let mut search_for: (String, i32) = (String::from(""), 0);
-
-    let mut last_relevant_key: char = '/';
+    let mut search_for: String = String::from("");
 
     loop {
         terminal.draw(|f| {
@@ -229,7 +228,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             f.render_widget(status_paragraph, chunks[1]);
 
             visible_list_length = 0;
-            let mut searched_n_item = 0;
             let items: Vec<ListItem> = todo_list
                 .iter()
                 .enumerate()
@@ -241,18 +239,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     };
 
                     if included {
-                        if search_for.0 != ""
-                            && task.contains(&search_for.0)
-                            && searched_n_item == search_for.1
-                        {
+                        if search_for != "" && task.contains(&search_for) {
                             list_state.select(Some(visible_list_length));
-                            searched_n_item += 1;
-                            //search_for = (String::from(""), search_for.1);
-                        } else if search_for.0 != ""
-                            && task.contains(&search_for.0)
-                            && searched_n_item < search_for.1
-                        {
-                            searched_n_item += 1;
                         }
 
                         // Only create the list item if the current item is included
@@ -281,8 +269,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                 })
                 .collect();
 
-            search_for.1 = 0;
-
             let todos = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("TODOs"))
                 .highlight_style(Style::default().add_modifier(Modifier::BOLD));
@@ -296,6 +282,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             }
         })?;
 
+        search_for = String::from("");
+
         // Poll for an event with a timeout to avoid blocking
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
@@ -306,7 +294,9 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
                     if !app_state.show_modal {
                         match key.code {
-                            KeyCode::Char('q') | KeyCode::Esc => break,
+                            KeyCode::Char('q') | KeyCode::Esc => {
+                                break;
+                            }
 
                             // Navigation
                             KeyCode::Char('j') => {
@@ -331,16 +321,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                             }
 
                             KeyCode::Char('/') => {
-                                search_for = (String::from("test"), 0);
-                                last_relevant_key = '/';
-                                //TODO: Search
-                            }
-                            KeyCode::Char('n') => {
-                                if last_relevant_key == '/' || last_relevant_key == 'n' {
-                                    search_for.1 += 1;
-                                    println!("test");
-                                }
-                                last_relevant_key = 'n';
+                                app_state.modifier = Modification::Search;
+                                app_state.show_modal = true;
                             }
 
                             // Switch status (Open/Done)
@@ -367,8 +349,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                                 //}
                                 app_state.modifier = Modification::New;
                                 app_state.show_modal = true;
-                                //todo_list = modification(&mut app_state, todo_list.clone());
-                                //app_state.modifier = Modification::Default;
                             }
 
                             // Renaming a task
@@ -393,17 +373,15 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                         match key.code {
                             _ => {
                                 app_state.input_state.handle_input(key);
-                                //match app_state.modifier {
-                                //    Modification::Rename => {}
-                                //    Modification::New => {}
-                                //    _ => {
-                                //        //TODO: display help here
-                                //    }
-                                //}
                                 if app_state.input_state.submitted {
                                     // Save the input
                                     let new_todo = app_state.input_state.input.clone();
-                                    todo_list = modification(&mut app_state, new_todo, todo_list);
+                                    if app_state.modifier == Modification::Search {
+                                        search_for = new_todo.clone();
+                                    } else {
+                                        todo_list =
+                                            modification(&mut app_state, new_todo, todo_list);
+                                    }
                                     //todo_list.push(("[ ]", new_todo)); // Assuming you have a Vec<String> for todos
                                     app_state.show_modal = false;
                                     app_state.input_state = InputState::new();
@@ -510,7 +488,7 @@ fn modification<'a>(
 fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
     // Define the rows and columns for the table
     let rows = vec![
-        Row::new(vec![Cell::from("quit application"), Cell::from("q")]),
+        Row::new(vec![Cell::from("quit application"), Cell::from("q, Esc")]),
         Row::new(vec![Cell::from("exit out of modal"), Cell::from("Esc")]),
         Row::new(vec![Cell::from("down"), Cell::from("j")]),
         Row::new(vec![Cell::from("up"), Cell::from("k")]),
@@ -521,6 +499,10 @@ fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
         Row::new(vec![Cell::from("rename selected todo"), Cell::from("n")]),
         Row::new(vec![Cell::from("goBottom"), Cell::from("G")]),
         Row::new(vec![
+            Cell::from("search for *input* <- always selects the last found"),
+            Cell::from("/"),
+        ]),
+        Row::new(vec![
             Cell::from("switch status of selected todo"),
             Cell::from("enter"),
         ]),
@@ -528,7 +510,7 @@ fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
     // Create a centered Rect for the modal
     let modal_width = (f.area().width * 60) / 100; // 60% of the terminal width
     let modal_height = match app_state.modifier {
-        Modification::Rename | Modification::New => 3,
+        Modification::Rename | Modification::New | Modification::Search => 3,
         //_ => (f.area().height * 30) / 100,
         _ => rows.len() as u16 + 2, //length of help_rows + 2 for border
     };
@@ -551,6 +533,17 @@ fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
                         .borders(Borders::ALL)
                         .border_style(Color::Blue)
                         .title("Rename selected todo"),
+                );
+            f.render_widget(input, modal_layout);
+        }
+        Modification::Search => {
+            let input = Paragraph::new(app_state.input_state.input.as_str())
+                .style(Style::default().fg(Color::White))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Color::Blue)
+                        .title("Search for:"),
                 );
             f.render_widget(input, modal_layout);
         }
