@@ -362,10 +362,17 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
 
                             // Deleting a task
                             KeyCode::Char('d') => {
-                                app_state.modifier = Modification::Delete;
-                                todo_list =
-                                    modification(&mut app_state, String::new(), todo_list.clone());
-                                app_state.modifier = Modification::Default;
+                                if app_state.status == Status::Done {
+                                    app_state.modifier = Modification::Delete;
+                                    todo_list = modification(
+                                        &mut app_state,
+                                        String::new(),
+                                        todo_list.clone(),
+                                    );
+                                    app_state.modifier = Modification::Default;
+                                } else {
+                                    app_state.show_modal = !app_state.show_modal;
+                                }
                             }
 
                             _ => {
@@ -461,9 +468,7 @@ fn modification<'a>(
     match app_state.modifier {
         //TODO: if the item is the last item it pos.item should go one up
         Modification::Delete => {
-            if app_state.status == Status::Done {
-                todo_list.remove(app_state.mod_item as usize);
-            }
+            todo_list.remove(app_state.mod_item as usize);
         }
         Modification::SwitchStatus => {
             let new_status = match todo_list[app_state.mod_item as usize].0 {
@@ -492,12 +497,15 @@ fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
     // Define the rows and columns for the table
     let rows = vec![
         Row::new(vec![Cell::from("quit application"), Cell::from("q, Esc")]),
-        Row::new(vec![Cell::from("exit out of modal"), Cell::from("Esc")]),
+        Row::new(vec![Cell::from("exit out of help"), Cell::from("Esc")]),
         Row::new(vec![Cell::from("down"), Cell::from("j")]),
         Row::new(vec![Cell::from("up"), Cell::from("k")]),
         Row::new(vec![Cell::from("switch status"), Cell::from("h, l, tab")]),
         Row::new(vec![Cell::from("goTop"), Cell::from("g")]),
-        Row::new(vec![Cell::from("delete done todo"), Cell::from("d")]),
+        Row::new(vec![
+            Cell::from("completly delete a finished todo"),
+            Cell::from("d"),
+        ]),
         Row::new(vec![Cell::from("add new todo"), Cell::from("a")]),
         Row::new(vec![Cell::from("rename selected todo"), Cell::from("n")]),
         Row::new(vec![Cell::from("goBottom"), Cell::from("G")]),
