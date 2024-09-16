@@ -126,10 +126,6 @@ struct App {
 }
 
 impl App {
-    //TODO: switch this function for a trait implementation of Not for Status and then just to
-    //pos.status = !pos.status;
-    //FIX: does not yet work as intended as it sometimes jumps to the first line even though it
-    //could stay at the line -> has to do with the row being two bigger than the length i think
     pub fn new() -> Self {
         Self {
             status: Status::Open,
@@ -140,7 +136,8 @@ impl App {
         }
     }
 
-    //FIX: acutally sometimes when swapping it is not highlighted at all
+    //TODO: switch this function for a trait implementation of Not for Status and then just to
+    //pos.status = !pos.status;
     fn switch_status(&mut self) -> &mut Self {
         match self.status {
             Status::Done => {
@@ -268,6 +265,12 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     }
                 })
                 .collect();
+
+            // Handle the case where no items match the current filter
+            if items.is_empty() {
+                list_state.select(None);
+                app_state.mod_item = -1;
+            }
 
             let todos = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("TODOs"))
@@ -605,6 +608,7 @@ pub fn get_todo_file_path() -> PathBuf {
 
     // Build the path to the .todo_app directory and todos.txt file
     let mut path = PathBuf::from(home_dir);
+    //path.push("tmp/.todo_app");
     path.push("mega/.todo_app");
     fs::create_dir_all(&path).expect("Failed to create directory");
     path.push("todos.txt");
