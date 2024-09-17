@@ -236,8 +236,10 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     };
 
                     if included {
+                        let mut found = false;
                         if search_for != "" && task.contains(&search_for) {
                             list_state.select(Some(visible_list_length));
+                            found = true;
                         }
 
                         // Only create the list item if the current item is included
@@ -247,14 +249,22 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                             };
                         }
 
-                        let task_spans = Line::from(vec![
+                        let mut task_spans = Line::from(vec![
                             Span::styled(
                                 status.to_string(),
                                 Style::default().fg(ratatui::prelude::Color::Yellow),
                             ),
                             Span::raw("    ".to_string()),
-                            Span::raw(task),
+                            //Span::raw(task),
                         ]);
+                        if found == false {
+                            task_spans.push_span(Span::raw(task))
+                        } else {
+                            task_spans.push_span(Span::styled(
+                                task,
+                                Style::default().fg(ratatui::prelude::Color::Red),
+                            ))
+                        }
                         // Increment x_visible for items being filtered out
                         visible_list_length += 1;
 
@@ -285,11 +295,10 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             }
         })?;
 
-        search_for = String::from("");
-
         // Poll for an event with a timeout to avoid blocking
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
+                search_for = String::from("");
                 // Check if enough time has passed to handle the next event
                 // also check if windows really needs this or just the polling
                 if last_event_time.elapsed() >= debounce_duration {
@@ -510,7 +519,7 @@ fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
         Row::new(vec![Cell::from("rename selected todo"), Cell::from("n")]),
         Row::new(vec![Cell::from("goBottom"), Cell::from("G")]),
         Row::new(vec![
-            Cell::from("search for *input* <- always selects the last found"),
+            Cell::from("search for *input* <- highlights all but selects only the last found"),
             Cell::from("/"),
         ]),
         Row::new(vec![
