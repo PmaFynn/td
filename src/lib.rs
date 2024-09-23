@@ -612,7 +612,7 @@ pub fn get_todo_file_path() -> PathBuf {
     // Build the path to the .todo_app directory and todos.txt file
     let mut path = PathBuf::from(home_dir);
     //path.push("tmp/.todo_app");
-    path.push("mega/.todo_app");
+    path.push(".todo_app");
     fs::create_dir_all(&path).expect("Failed to create directory");
     path.push("todos.txt");
     path
