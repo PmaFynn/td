@@ -79,14 +79,6 @@ impl InputState {
             submitted: false,
         }
     }
-    pub fn reset() -> Self {
-        Self {
-            input: String::new(),
-            cursor_position: 0,
-            canceled: false,
-            submitted: false,
-        }
-    }
     pub fn handle_input(&mut self, key: crossterm::event::KeyEvent) {
         match key.code {
             KeyCode::Char(c) => {
@@ -180,7 +172,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
     let mut app_state = App::new();
 
     let mut last_event_time = Instant::now();
-    let debounce_duration = Duration::from_millis(1); // Adjust the debounce duration to suit your need
+    let debounce_duration = Duration::from_millis(120); // Adjust the debounce duration to suit your need
 
     let mut visible_list_length = 0;
 
@@ -300,7 +292,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             if let Event::Key(key) = event::read()? {
                 search_for = String::from("");
                 // Check if enough time has passed to handle the next event
-                // also check if windows really needs this or just the polling
+                // also check if windows really needs this or just the polling -> windows needs
+                // this
                 if last_event_time.elapsed() >= debounce_duration {
                     last_event_time = Instant::now(); // Reset event timer
 
@@ -626,7 +619,7 @@ pub fn get_todo_file_path() -> PathBuf {
     // Build the path to the .todo_app directory and todos.txt file
     let mut path = PathBuf::from(home_dir);
     //path.push("tmp/.todo_app");
-    path.push("mega/.todo_app");
+    path.push(".todo_app");
     fs::create_dir_all(&path).expect("Failed to create directory");
     path.push("todos.txt");
     path
