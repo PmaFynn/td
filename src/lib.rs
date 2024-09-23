@@ -102,8 +102,12 @@ impl InputState {
                 }
             }
 
-            KeyCode::Enter => self.submitted = true,
-            KeyCode::Esc => self.canceled = true,
+            KeyCode::Enter => {
+                self.submitted = true;
+            }
+            KeyCode::Esc => {
+                self.canceled = true;
+            }
             _ => {}
         }
     }
@@ -172,7 +176,9 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
     let mut app_state = App::new();
 
     let mut last_event_time = Instant::now();
-    let debounce_duration = Duration::from_millis(120); // Adjust the debounce duration to suit your need
+    let debounce_duration_normal = Duration::from_millis(1); // Adjust the debounce duration to suit your need
+    let debounce_duration_repeat = Duration::from_millis(150); // Adjust the debounce duration to suit your need
+    let mut last_key = KeyCode::Char('a');
 
     let mut visible_list_length = 0;
 
@@ -288,15 +294,25 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         })?;
 
         // Poll for an event with a timeout to avoid blocking
-        if event::poll(Duration::from_millis(100))? {
+        //if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 search_for = String::from("");
                 // Check if enough time has passed to handle the next event
                 // also check if windows really needs this or just the polling -> windows needs
                 // this
-                if last_event_time.elapsed() >= debounce_duration {
-                    last_event_time = Instant::now(); // Reset event timer
 
+                //if key.code == last_key {
+                //    if last_event_time.elapsed() <= debounce_duration_repeat {
+                //        continue
+                //}
+                if last_event_time.elapsed() >= debounce_duration_normal {
+                    if key.code == last_key {
+                        if last_event_time.elapsed() <= debounce_duration_repeat {
+                            continue
+                    }
+                }
+                    last_event_time = Instant::now(); // Reset event timer
+                    last_key = key.code;
                     if !app_state.show_modal {
                         match key.code {
                             KeyCode::Char('q') | KeyCode::Esc => {
@@ -331,7 +347,16 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                             }
 
                             // Switch status (Open/Done)
-                            KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
+                            //KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
+                            //    app_state.switch_status();
+                            //}
+                            KeyCode::Char('h') => {
+                                app_state.switch_status();
+                            }
+                            KeyCode::Char('l') => {
+                                app_state.switch_status();
+                            }
+                            KeyCode::Tab => {
                                 app_state.switch_status();
                             }
 
@@ -385,6 +410,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                         match key.code {
                             _ => {
                                 app_state.input_state.handle_input(key);
+                                last_key = key.code;
                                 last_event_time = Instant::now(); // Reset event timer
                                 if app_state.input_state.submitted {
                                     // Save the input
@@ -410,7 +436,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                     }
                 }
             }
-        }
+        //}
 
         std::thread::sleep(Duration::from_millis(33));
     }
