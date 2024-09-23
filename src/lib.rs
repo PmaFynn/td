@@ -1,4 +1,4 @@
-use crossterm::event::{Event, KeyCode};
+use crossterm::event::{Event, KeyCode, KeyEventKind};
 use crossterm::{
     event, execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -18,7 +18,6 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
-use std::time::Instant;
 use std::usize;
 use std::{env, io::Read};
 
@@ -72,14 +71,6 @@ struct InputState {
 
 impl InputState {
     pub fn new() -> Self {
-        Self {
-            input: String::new(),
-            cursor_position: 0,
-            canceled: false,
-            submitted: false,
-        }
-    }
-    pub fn reset() -> Self {
         Self {
             input: String::new(),
             cursor_position: 0,
@@ -178,9 +169,6 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         .collect();
 
     let mut app_state = App::new();
-
-    let mut last_event_time = Instant::now();
-    let debounce_duration = Duration::from_millis(1); // Adjust the debounce duration to suit your need
 
     let mut visible_list_length = 0;
 
@@ -298,12 +286,10 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         // Poll for an event with a timeout to avoid blocking
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
                 search_for = String::from("");
                 // Check if enough time has passed to handle the next event
                 // also check if windows really needs this or just the polling
-                if last_event_time.elapsed() >= debounce_duration {
-                    last_event_time = Instant::now(); // Reset event timer
-
                     if !app_state.show_modal {
                         match key.code {
                             KeyCode::Char('q') | KeyCode::Esc => {
