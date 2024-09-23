@@ -385,6 +385,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                         match key.code {
                             _ => {
                                 app_state.input_state.handle_input(key);
+                                last_event_time = Instant::now(); // Reset event timer
                                 if app_state.input_state.submitted {
                                     // Save the input
                                     let new_todo = app_state.input_state.input.clone();
