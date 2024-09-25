@@ -488,7 +488,10 @@ fn render_modal(f: &mut ratatui::Frame, app_state: &App) {
         Row::new(vec![Cell::from("exit out of help"), Cell::from("Esc")]),
         Row::new(vec![Cell::from("down"), Cell::from("j")]),
         Row::new(vec![Cell::from("up"), Cell::from("k")]),
-        Row::new(vec![Cell::from("switch status"), Cell::from("h, l, tab")]),
+        Row::new(vec![
+            Cell::from("toggle visibles todos"),
+            Cell::from("h, l, tab"),
+        ]),
         Row::new(vec![Cell::from("goTop"), Cell::from("g")]),
         Row::new(vec![
             Cell::from("completly delete a finished todo"),
