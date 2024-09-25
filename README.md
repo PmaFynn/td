@@ -39,8 +39,8 @@ A simple, fast, and efficient TUI todo application written in Rust with *vim bin
 ### Clone the repository
 
 ```sh
-git clone https://github.com/yourusername/yourprojectname.git
-cd yourprojectname
+git clone https://github.com/pmafynn/td.git
+cd td
 ```
 
 ### Build the application
