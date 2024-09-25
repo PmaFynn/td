@@ -1,20 +1,34 @@
 
-# Rust t(o)d(o) Application
+# Rust todo Application
 
 <!--![Build Status](https://img.shields.io/github/workflow/status/yourusername/yourprojectname/CI)-->
 <!-- ![License](https://img.shields.io/github/license/yourusername/yourprojectname)-->
 <!--![Version](https://img.shields.io/github/v/release/yourusername/yourprojectname)-->
 
-A simple, fast, and efficient TUI t(o)d(o) application written in Rust. This application allows you to manage your tasks directly from the terminal with ease.
+A simple, fast, and efficient TUI todo application written in Rust with *vim bindings*.
 
 ## Features
 
-- Add new tasks with a description and due date.
-- List all pending tasks.
-- Mark tasks as completed.
-- Remove completed or outdated tasks.
-- Prioritize tasks.
-- Save tasks persistently using local storage.
+### CLI Features
+
+- Add new tasks **FAST** (see usage below)
+
+### TUI Features - Keybinds
+
+| Action                                                                      | Keybind    |
+|-----------------------------------------------------------------------------|------------|
+| quit application                                                            | q, Esc     |
+| exit out of help                                                            | Esc        |
+| down                                                                        | j          |
+| up                                                                          | k          |
+| toggle visible todos                                                        | h, l, tab  |
+| goTop                                                                       | g          |
+| completly delete a finished todo                                            | d          |
+| add new todo                                                                | a          |
+| rename selected todo                                                        | n          |
+| goBottom                                                                    | G          |
+| search for *input* <- highlights all but selects only the last found        | /          |
+| switch status of selected todo                                              | enter      |
 
 ## Installation
 
@@ -40,6 +54,8 @@ cargo build --release
 ```sh
 ./target/release/td
 ```
+
+Create alias or add to path if you like it
 
 ## Usage
 
