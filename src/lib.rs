@@ -282,127 +282,119 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             }
         })?;
 
-        // Poll for an event with a timeout to avoid blocking
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    search_for = String::from("");
-                    // Check if enough time has passed to handle the next event
-                    // also check if windows really needs this or just the polling
-                    if !app_state.show_modal {
-                        match key.code {
-                            KeyCode::Char('q') | KeyCode::Esc => {
-                                break;
-                            }
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                search_for = String::from("");
+                // Check if enough time has passed to handle the next event
+                // also check if windows really needs this or just the polling
+                if !app_state.show_modal {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => {
+                            break;
+                        }
 
-                            // Navigation
-                            KeyCode::Char('j') => {
-                                if let Some(selected) = list_state.selected() {
-                                    let new_index = (selected + 1).min(todo_list.len() - 1);
-                                    list_state.select(Some(new_index));
-                                }
+                        // Navigation
+                        KeyCode::Char('j') => {
+                            if let Some(selected) = list_state.selected() {
+                                let new_index = (selected + 1).min(todo_list.len() - 1);
+                                list_state.select(Some(new_index));
                             }
-                            KeyCode::Char('k') => {
-                                if let Some(selected) = list_state.selected() {
-                                    let new_index = selected.saturating_sub(1);
-                                    list_state.select(Some(new_index));
-                                }
+                        }
+                        KeyCode::Char('k') => {
+                            if let Some(selected) = list_state.selected() {
+                                let new_index = selected.saturating_sub(1);
+                                list_state.select(Some(new_index));
                             }
-                            KeyCode::Char('g') => {
-                                //pos.go_top();
-                                list_state.select(Some(0));
-                            }
+                        }
+                        KeyCode::Char('g') => {
+                            //pos.go_top();
+                            list_state.select(Some(0));
+                        }
 
-                            KeyCode::Char('G') => {
-                                list_state.select(Some(todo_list.len() - 1));
-                            }
+                        KeyCode::Char('G') => {
+                            list_state.select(Some(todo_list.len() - 1));
+                        }
 
-                            KeyCode::Char('/') => {
-                                app_state.modifier = Modification::Search;
-                                app_state.show_modal = true;
-                            }
+                        KeyCode::Char('/') => {
+                            app_state.modifier = Modification::Search;
+                            app_state.show_modal = true;
+                        }
 
-                            // Switch status (Open/Done)
-                            KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
-                                app_state.switch_status();
-                            }
+                        // Switch status (Open/Done)
+                        KeyCode::Char('h') | KeyCode::Char('l') | KeyCode::Tab => {
+                            app_state.switch_status();
+                        }
 
-                            // Switch task status (Open/Done) when pressing Enter
-                            KeyCode::Enter => {
-                                app_state.modifier = Modification::SwitchStatus;
+                        // Switch task status (Open/Done) when pressing Enter
+                        KeyCode::Enter => {
+                            app_state.modifier = Modification::SwitchStatus;
+                            todo_list =
+                                modification(&mut app_state, String::new(), todo_list.clone());
+                            app_state.modifier = Modification::Default;
+                        }
+
+                        // Adding a new task
+                        KeyCode::Char('a') => {
+                            //HACK: idk -> maybe i want to be able input todos after reading a
+                            //done todo
+                            //
+                            //if app_state.status == Status::Open {
+                            //    app_state.modifier = Modification::New;
+                            //    app_state.show_modal = true;
+                            //}
+                            app_state.modifier = Modification::New;
+                            app_state.show_modal = true;
+                        }
+
+                        // Renaming a task
+                        KeyCode::Char('r') => {
+                            app_state.modifier = Modification::Rename;
+                            app_state.show_modal = true;
+                        }
+
+                        // Deleting a task
+                        KeyCode::Char('d') => {
+                            if app_state.status == Status::Done {
+                                app_state.modifier = Modification::Delete;
                                 todo_list =
                                     modification(&mut app_state, String::new(), todo_list.clone());
                                 app_state.modifier = Modification::Default;
-                            }
-
-                            // Adding a new task
-                            KeyCode::Char('a') => {
-                                //HACK: idk -> maybe i want to be able input todos after reading a
-                                //done todo
-                                //
-                                //if app_state.status == Status::Open {
-                                //    app_state.modifier = Modification::New;
-                                //    app_state.show_modal = true;
-                                //}
-                                app_state.modifier = Modification::New;
-                                app_state.show_modal = true;
-                            }
-
-                            // Renaming a task
-                            KeyCode::Char('r') => {
-                                app_state.modifier = Modification::Rename;
-                                app_state.show_modal = true;
-                            }
-
-                            // Deleting a task
-                            KeyCode::Char('d') => {
-                                if app_state.status == Status::Done {
-                                    app_state.modifier = Modification::Delete;
-                                    todo_list = modification(
-                                        &mut app_state,
-                                        String::new(),
-                                        todo_list.clone(),
-                                    );
-                                    app_state.modifier = Modification::Default;
-                                } else {
-                                    app_state.show_modal = !app_state.show_modal;
-                                }
-                            }
-
-                            _ => {
+                            } else {
                                 app_state.show_modal = !app_state.show_modal;
                             }
                         }
-                    } else {
-                        match key.code {
-                            _ => {
-                                app_state.input_state.handle_input(key);
-                                if app_state.input_state.submitted {
-                                    // Save the input
-                                    let new_todo = app_state.input_state.input.clone();
-                                    if app_state.modifier == Modification::Search {
-                                        search_for = new_todo.clone();
-                                    } else {
-                                        todo_list =
-                                            modification(&mut app_state, new_todo, todo_list);
-                                    }
-                                    //todo_list.push(("[ ]", new_todo)); // Assuming you have a Vec<String> for todos
-                                    app_state.show_modal = false;
-                                    app_state.input_state = InputState::new();
-                                    app_state.modifier = Modification::Default;
-                                } else if app_state.input_state.canceled {
-                                    // Cancel input
-                                    app_state.show_modal = false;
-                                    app_state.input_state = InputState::new();
-                                    app_state.modifier = Modification::Default;
+
+                        _ => {
+                            app_state.show_modal = !app_state.show_modal;
+                        }
+                    }
+                } else {
+                    match key.code {
+                        _ => {
+                            app_state.input_state.handle_input(key);
+                            if app_state.input_state.submitted {
+                                // Save the input
+                                let new_todo = app_state.input_state.input.clone();
+                                if app_state.modifier == Modification::Search {
+                                    search_for = new_todo.clone();
+                                } else {
+                                    todo_list = modification(&mut app_state, new_todo, todo_list);
                                 }
+                                //todo_list.push(("[ ]", new_todo)); // Assuming you have a Vec<String> for todos
+                                app_state.show_modal = false;
+                                app_state.input_state = InputState::new();
+                                app_state.modifier = Modification::Default;
+                            } else if app_state.input_state.canceled {
+                                // Cancel input
+                                app_state.show_modal = false;
+                                app_state.input_state = InputState::new();
+                                app_state.modifier = Modification::Default;
                             }
                         }
                     }
                 }
             }
         }
-
         std::thread::sleep(Duration::from_millis(33));
     }
 
