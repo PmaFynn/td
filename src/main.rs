@@ -74,6 +74,7 @@ fn get_todo_file_path(path_to_use: String) -> PathBuf {
 
     #[cfg(not(target_os = "windows"))]
     let home_dir = env::var("HOME").unwrap_or_else(|_| String::from("."));
+    //TODO: perhaps look for other locations as well
     let config_path = PathBuf::from(&home_dir).join(".config/td/config.yaml");
     //config_path.push(".config/tdfsf/config.yaml");
     //TODO: if no file here take the default config in projects root
