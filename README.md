@@ -1,11 +1,11 @@
 
-# Rust ToDo CLI Application
+# Rust t(o)d(o) Application
 
 <!--![Build Status](https://img.shields.io/github/workflow/status/yourusername/yourprojectname/CI)-->
 <!-- ![License](https://img.shields.io/github/license/yourusername/yourprojectname)-->
 <!--![Version](https://img.shields.io/github/v/release/yourusername/yourprojectname)-->
 
-A simple, fast, and efficient command-line ToDo application written in Rust. This application allows you to manage your tasks directly from the terminal with ease.
+A simple, fast, and efficient TUI t(o)d(o) application written in Rust. This application allows you to manage your tasks directly from the terminal with ease.
 
 ## Features
 
@@ -38,7 +38,7 @@ cargo build --release
 ### Run the application
 
 ```sh
-./target/release/todo
+./target/release/td
 ```
 
 ## Usage
@@ -48,58 +48,28 @@ Here are some common commands you can use with this ToDo application:
 ### Add a new task
 
 ```sh
-todo add "Finish the Rust project" --due 2024-08-20
+td "new task"
 ```
-
-### List all tasks
+or 
+```sh
+td new task
+```
+### Enter TUI
 
 ```sh
-todo list
+td
 ```
 
-### Mark a task as completed
-
-```sh
-todo complete 1
-```
-
-### Remove a task
-
-```sh
-todo remove 1
-```
-
-### Prioritize a task
-
-```sh
-todo prioritize 1 --priority high
-```
-
-For more options and usage, run:
+### For more options and usage, run:
 
 ```sh
 todo --help
 ```
 
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature/your-feature`).
-3. Commit your changes (`git commit -am 'Add some feature'`).
-4. Push to the branch (`git push origin feature/your-feature`).
-5. Create a new Pull Request.
-
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+[LICENSE](LICENSE.md)
 
 ## Acknowledgements
 
 - Thanks to the [Rust](https://www.rust-lang.org/) community for their amazing work on the language and ecosystem.
-- Shoutout to all contributors and users!
-
-## Contact
-
-For any inquiries, you can reach me at [youremail@example.com](mailto:youremail@example.com).
