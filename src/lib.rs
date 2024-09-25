@@ -12,14 +12,13 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table},
     Terminal,
 };
-
 use std::error::Error;
 use std::fs;
+use std::io::Read;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
 use std::usize;
-use std::{env, io::Read};
 
 #[derive(Debug, PartialEq)]
 pub enum Status {
@@ -287,9 +286,9 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                search_for = String::from("");
-                // Check if enough time has passed to handle the next event
-                // also check if windows really needs this or just the polling
+                    search_for = String::from("");
+                    // Check if enough time has passed to handle the next event
+                    // also check if windows really needs this or just the polling
                     if !app_state.show_modal {
                         match key.code {
                             KeyCode::Char('q') | KeyCode::Esc => {
@@ -599,21 +598,4 @@ pub fn write_todo(path: PathBuf, todo: Task) {
         }
         Err(i) => println!("Error writing to file: {}", i),
     }
-}
-
-pub fn get_todo_file_path() -> PathBuf {
-    // Determine home directory based on the operating system
-    #[cfg(target_os = "windows")]
-    let home_dir = env::var("USERPROFILE").unwrap_or_else(|_| String::from("."));
-
-    #[cfg(not(target_os = "windows"))]
-    let home_dir = env::var("HOME").unwrap_or_else(|_| String::from("."));
-
-    // Build the path to the .todo_app directory and todos.txt file
-    let mut path = PathBuf::from(home_dir);
-    //path.push("tmp/.todo_app");
-    path.push("mega/.todo_app");
-    fs::create_dir_all(&path).expect("Failed to create directory");
-    path.push("todos.txt");
-    path
 }
