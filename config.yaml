@@ -1,1 +1,4 @@
-path: "mega/.todo_app/"
+root: "mega/.todo_app/"
+file:
+    default: "main.txt"
+    uni:  "uni.txt"

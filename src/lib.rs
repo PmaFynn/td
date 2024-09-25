@@ -439,6 +439,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
     )?;
     terminal.show_cursor()?;
 
+    println!("wrote to {}", path.display());
+
     Ok(())
 }
 
