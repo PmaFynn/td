@@ -78,7 +78,7 @@ td
 ### For more options and usage, run:
 
 ```sh
-todo --help
+td --help
 ```
 
 ## License
