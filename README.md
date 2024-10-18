@@ -6,6 +6,8 @@
 
 A simple, fast, and efficient TUI todo application written in Rust with *vim bindings*.
 
+![Showcase](tdShowcase.gif)
+
 ## Features
 
 ### CLI Features
