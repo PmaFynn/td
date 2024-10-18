@@ -182,6 +182,10 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
         terminal.draw(|f| {
             let size = f.area();
 
+            if list_state.selected() == None && todo_list.len() >= 0 {
+                list_state.select(Some(0));
+            }
+
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Percentage(90), Constraint::Percentage(10)].as_ref())
@@ -266,7 +270,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
             // Handle the case where no items match the current filter
             if items.is_empty() {
                 list_state.select(None);
-                app_state.mod_item = -1;
+                app_state.mod_item = 0;
             }
 
             let todos = List::new(items)
@@ -312,7 +316,7 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                         }
 
                         KeyCode::Char('G') => {
-                            list_state.select(Some(todo_list.len() - 1));
+                            list_state.select(Some(visible_list_length - 1));
                         }
 
                         KeyCode::Char('/') => {
@@ -377,7 +381,9 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
                                 let new_todo = app_state.input_state.input.clone();
                                 if app_state.modifier == Modification::Search {
                                     search_for = new_todo.clone();
-                                } else {
+                                } else if app_state.modifier == Modification::New {
+                                    todo_list = modification(&mut app_state, new_todo, todo_list);
+                                } else if !(app_state.mod_item as i32 >= todo_list.len() as i32) {
                                     todo_list = modification(&mut app_state, new_todo, todo_list);
                                 }
                                 //todo_list.push(("[ ]", new_todo)); // Assuming you have a Vec<String> for todos
@@ -439,7 +445,8 @@ pub fn main_tui(path: PathBuf) -> io::Result<()> {
     )?;
     terminal.show_cursor()?;
 
-    println!("wrote to {}", path.display());
+    //HACK: Why did I put this in? Just bloat isnt it?
+    //println!("wrote to {}", path.display());
 
     Ok(())
 }
@@ -449,9 +456,13 @@ fn modification<'a>(
     todo_item_from_input: String,
     mut todo_list: Vec<(&'a str, String)>,
 ) -> Vec<(&'a str, String)> {
-    if app_state.mod_item as usize >= todo_list.len() {
-        return todo_list;
-    }
+    //if app_state.modifier == Modification::New {
+    //    todo_list.push(("[ ]", todo_item_from_input));
+    //    return todo_list;
+    //}
+    //if app_state.mod_item as i32 >= todo_list.len() as i32 {
+    //    return todo_list;
+    //}
 
     match app_state.modifier {
         //TODO: if the item is the last item it pos.item should go one up
@@ -472,7 +483,6 @@ fn modification<'a>(
             todo_list[app_state.mod_item as usize].1 = todo_item_from_input;
         }
         Modification::New => {
-            //TODO: Implement a function to get a new task name, for now, it's unchanged
             todo_list.push(("[ ]", todo_item_from_input));
         }
         _ => {}
