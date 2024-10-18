@@ -457,16 +457,6 @@ fn modification<'a>(
     todo_item_from_input: String,
     mut todo_list: Vec<(&'a str, String)>,
 ) -> Vec<(&'a str, String)> {
-    //if app_state.modifier == Modification::New {
-    //    todo_list.push(("[ ]", todo_item_from_input));
-    //    return todo_list;
-    //}
-    if app_state.mod_item as i32 >= todo_list.len() as i32 {
-        println!("{:?}", app_state.mod_item);
-        std::thread::sleep(Duration::from_millis(33));
-        return todo_list;
-    }
-
     match app_state.modifier {
         //TODO: if the item is the last item it pos.item should go one up
         Modification::Delete => {
