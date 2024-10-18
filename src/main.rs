@@ -74,16 +74,20 @@ fn get_todo_file_path(path_to_use: String) -> PathBuf {
 
     #[cfg(not(target_os = "windows"))]
     let home_dir = env::var("HOME").unwrap_or_else(|_| String::from("."));
-    //TODO: perhaps look for other locations as well
-    let config_path = PathBuf::from(&home_dir).join(".config/td/config.yaml");
-    //config_path.push(".config/tdfsf/config.yaml");
-    //TODO: if no file here take the default config in projects root
+    let config_dir = PathBuf::from(&home_dir).join(".config/td");
+    let config_path = config_dir.join("config.yaml");
 
-    let config_contents = match fs::read_to_string(config_path) {
-        Ok(string) => string,
-        Err(_) => fs::read_to_string("config.yaml").expect("backup config could not be read"),
-    };
+    if !config_path.exists() {
+        fs::create_dir_all(&config_dir).expect("Failed to create config directory");
+        let default_config = r#"root: ".todo_app/"
+file:
+    default: "main.txt"
+    example: "example.txt"
+"#;
+        fs::write(&config_path, default_config).expect("Failed to write default config");
+    }
 
+    let config_contents = fs::read_to_string(&config_path).expect("Failed to read config file");
     let config: Config =
         serde_yml::from_str(&config_contents).expect("Could not deserialize config.yml");
 
