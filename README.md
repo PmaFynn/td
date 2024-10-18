@@ -8,6 +8,8 @@ A simple, fast, and efficient TUI todo application written in Rust with *vim bin
 
 ![Showcase](tdShowcase.gif)
 
+## Quick Note:
+I wrote this for my personal use and am actually still using it. However, this was my first Rust project and the code is far from idiomatic :D
 ## Features
 
 ### CLI Features
