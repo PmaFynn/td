@@ -1,2 +1,0 @@
-- allow setting up of more td files (e.g. work dir) -> td -work and td is the default
-	- also perhaps bring up help menu when pressing d in the wrong menu
